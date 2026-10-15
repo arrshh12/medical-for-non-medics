@@ -1,0 +1,25 @@
+# Environments
+.env
+*.env
+backend/.env
+
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Build outputs
+dist/
+build/
+.cache/
+
+# Logs
+*.log
+
+# Excluded folders requested by user
+iphone&xtool/
+plans prompt/

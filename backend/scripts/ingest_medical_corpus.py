@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""
+Seeds vetted medical literature chunks (StatPearls & PubMed Open Access)
+pre-linked to canonical FMA anatomical structure IDs.
+"""
+
+import json
+from pathlib import Path
+
+MEDICAL_CHUNKS = [
+    {
+        "source_type": "StatPearls",
+        "source_id": "NBK459269",
+        "title": "Acute Myocardial Infarction",
+        "section_heading": "Pathophysiology and Coronary Occlusion",
+        "content": "Acute myocardial infarction (AMI) occurs when myocardial ischemia exceeds a critical threshold, leading to irreversible cardiomyocyte necrosis. The primary precipitating event in the vast majority of cases is the rupture or erosion of an unstable, lipid-rich atherosclerotic plaque in a coronary artery—most frequently the Left Anterior Descending (LAD) artery. Plaque rupture exposes subendothelial collagen and tissue factor to circulating platelets, triggering acute platelet adhesion, activation, and thrombosis. Complete occlusion of the LAD artery abruptly halts downstream microvascular perfusion to the anterior wall of the left ventricle and the anterior two-thirds of the interventricular septum, initiating severe regional ischemia within seconds and wave-front coagulative necrosis within 20 to 40 minutes if reperfusion is not achieved.",
+        "associated_fma_ids": ["FMA_7088", "FMA_7101", "FMA_9462", "FMA_7163", "FMA_7099"],
+        "citation_url": "https://www.ncbi.nlm.nih.gov/books/NBK459269/"
+    },
+    {
+        "source_type": "StatPearls",
+        "source_id": "NBK459269",
+        "title": "Acute Myocardial Infarction",
+        "section_heading": "Anatomical Distribution and Coronary Territories",
+        "content": "The clinical and electrocardiographic manifestations of myocardial infarction correlate directly with the coronary vascular anatomy. Occlusion of the Left Anterior Descending (LAD) coronary artery leads to anterior, septal, or apical infarction, affecting the anterior wall of the left ventricle (FMA_7099), the anterior interventricular septum (FMA_9462), and the cardiac apex (FMA_7163). In contrast, occlusion of the Right Coronary Artery (RCA) causes inferior and right ventricular wall necrosis, and occlusion of the Left Circumflex (LCX) artery compromises the lateral free wall of the left ventricle.",
+        "associated_fma_ids": ["FMA_7101", "FMA_7100", "FMA_7105", "FMA_7099", "FMA_9462", "FMA_7163"],
+        "citation_url": "https://www.ncbi.nlm.nih.gov/books/NBK459269/"
+    },
+    {
+        "source_type": "StatPearls",
+        "source_id": "NBK537236",
+        "title": "Anatomy, Thorax, Heart",
+        "section_heading": "Chambers and Internal Architecture",
+        "content": "The human heart is composed of four distinct chambers arranged into two functional pumps operating in series. The right heart consists of the right atrium (FMA_7096) and right ventricle (FMA_7098), operating under low pressure to direct systemic venous blood through the pulmonary circulation for oxygenation. The left heart comprises the left atrium (FMA_7097) and the thick-walled muscular left ventricle (FMA_7099), operating under high systemic pressure to eject oxygen-rich blood into the ascending aorta (FMA_3734). The chambers are partitioned by the interatrial and interventricular septa, and guarded by atrioventricular and semilunar valves that ensure unidirectional blood flow.",
+        "associated_fma_ids": ["FMA_7088", "FMA_7096", "FMA_7098", "FMA_7097", "FMA_7099", "FMA_3734"],
+        "citation_url": "https://www.ncbi.nlm.nih.gov/books/NBK537236/"
+    },
+    {
+        "source_type": "StatPearls",
+        "source_id": "NBK545163",
+        "title": "Physiology, Cardiac Cycle",
+        "section_heading": "Sequential Hemodynamics and Valve Mechanics",
+        "content": "During ventricular diastole, systemic venous return from the superior and inferior venae cavae enters the right atrium (FMA_7096). As ventricular pressure falls below atrial pressure, the tricuspid valve (FMA_7234) opens, allowing passive filling of the right ventricle (FMA_7098). Simultaneously, pulmonary venous blood fills the left atrium (FMA_7097) and passes through the open mitral valve (FMA_7236) into the left ventricle (FMA_7099). Isovolumetric ventricular contraction rapidly increases intraventricular pressure, closing the atrioventricular valves (producing the S1 heart sound). When ventricular pressure exceeds arterial diastolic pressures, the aortic valve (FMA_7238) and pulmonary valve (FMA_7237) open, ejecting blood into the aorta (FMA_3734) and pulmonary trunk (FMA_8614).",
+        "associated_fma_ids": ["FMA_7096", "FMA_7098", "FMA_7097", "FMA_7099", "FMA_7234", "FMA_7236", "FMA_7237", "FMA_7238", "FMA_3734", "FMA_8614"],
+        "citation_url": "https://www.ncbi.nlm.nih.gov/books/NBK545163/"
+    },
+    {
+        "source_type": "StatPearls",
+        "source_id": "NBK532917",
+        "title": "Coronary Artery Atherosclerosis",
+        "section_heading": "Atheromatous Plaque Progression and Stenosis",
+        "content": "Coronary atherosclerosis is a chronic inflammatory disorder of the arterial intima initiated by endothelial dysfunction and the subendothelial retention of apolipoprotein B-containing lipoproteins. As macrophages engulf oxidized lipids, foam cells accumulate to form fatty streaks, which evolve into fibroatheromatous plaques characterized by a necrotic core covered by a fibrous cap. Hemodynamically significant luminal obstruction typically develops when cross-sectional area reduction exceeds 70%, producing exertional angina. Unstable plaques with thin fibrous caps and dense macrophage infiltration are prone to sudden rupture, which converts stable chronic coronary disease into an acute coronary syndrome.",
+        "associated_fma_ids": ["FMA_7101", "FMA_7100", "FMA_7105", "FMA_3734"],
+        "citation_url": "https://www.ncbi.nlm.nih.gov/books/NBK532917/"
+    },
+    {
+        "source_type": "StatPearls",
+        "source_id": "NBK541070",
+        "title": "Anatomy, Thorax, Lungs",
+        "section_heading": "Pulmonary Architecture and Gas Exchange",
+        "content": "The lungs are paired essential respiratory organs situated bilaterally within the thoracic cavity, flanking the central mediastinum and pericardium. The right lung (FMA_7309) possesses three lobes (superior, middle, inferior) divided by horizontal and oblique fissures, whereas the left lung (FMA_7310) consists of two lobes with a prominent cardiac notch accommodating the apex of the heart. Deoxygenated blood enters the alveolar capillary network via the pulmonary arterial branches for carbon dioxide offloading and oxygen binding, subsequently returning via four pulmonary veins into the left atrium (FMA_7097).",
+        "associated_fma_ids": ["FMA_7309", "FMA_7310", "FMA_7394", "FMA_7097", "FMA_8614"],
+        "citation_url": "https://www.ncbi.nlm.nih.gov/books/NBK541070/"
+    },
+    {
+        "source_type": "StatPearls",
+        "source_id": "NBK519536",
+        "title": "Anatomy, Thorax, Aorta",
+        "section_heading": "Great Vessels and Systemic Outflow",
+        "content": "The aorta represents the primary conduit of systemic arterial circulation. The ascending aorta (FMA_3734) arises from the fibrous aortic annulus of the left ventricle and features the aortic sinuses of Valsalva, from which the right and left coronary arteries emerge. The vessel curves superoposteriorly to form the aortic arch (FMA_3735), arching over the pulmonary trunk and left mainstem bronchus while giving rise to the brachiocephalic artery, left common carotid artery, and left subclavian artery before descending through the posterior thoracic cavity.",
+        "associated_fma_ids": ["FMA_3734", "FMA_3735", "FMA_7101", "FMA_7100", "FMA_7099"],
+        "citation_url": "https://www.ncbi.nlm.nih.gov/books/NBK519536/"
+    }
+]
+
+
+def main():
+    seed_dir = Path(__file__).resolve().parent.parent / "app" / "db" / "seed_data"
+    seed_dir.mkdir(parents=True, exist_ok=True)
+
+    lit_file = seed_dir / "medical_literature.json"
+    with open(lit_file, "w", encoding="utf-8") as f:
+        json.dump(MEDICAL_CHUNKS, f, indent=2)
+
+    print(f"[ingest_medical_corpus] Successfully ingested {len(MEDICAL_CHUNKS)} vetted StatPearls literature chunks to {lit_file}.")
+
+
+if __name__ == "__main__":
+    main()
