@@ -16,10 +16,13 @@ env/
 dist/
 build/
 .cache/
+.pytest_cache/
 
 # Logs
 *.log
 
-# Excluded folders requested by user
+# Excluded directories (iPhone app and prompt planning)
 iphone&xtool/
 plans prompt/
+*.xcodeproj/
+*.xcworkspace/
