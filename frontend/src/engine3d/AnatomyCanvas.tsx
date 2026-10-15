@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, ContactShadows } from '@react-three/drei';
+import { PerspectiveCamera, ContactShadows } from '@react-three/drei';
 import { ModelLoader } from './ModelLoader';
 import { VascularBlockageMesh } from './pathology/VascularBlockageMesh';
 import { FlowParticleSystem } from './pathology/FlowParticleSystem';
@@ -38,17 +38,7 @@ export const AnatomyCanvas: React.FC = () => {
           {/* Default Perspective Camera */}
           <PerspectiveCamera makeDefault fov={45} position={[0, 0, 4.8]} near={0.1} far={50} />
 
-          {/* Orbit Controls */}
-          <OrbitControls
-            makeDefault
-            enableDamping
-            dampingFactor={0.06}
-            minDistance={1.0}
-            maxDistance={12.0}
-            target={[0, 0, 0]}
-          />
-
-          {/* Smooth Camera Rig & Bounding-Sphere Framing */}
+          {/* Smooth Camera Rig & Bounding-Sphere Framing (includes OrbitControls) */}
           <CameraRig />
 
           {/* Studio Anatomical Lighting Rig */}

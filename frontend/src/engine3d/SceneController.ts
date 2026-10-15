@@ -1,11 +1,8 @@
 import { useSceneStore } from '../store/useSceneStore';
-import {
+import type {
+  ChoreographyKeyframe,
   SceneCommandSchema,
-  AnnotationSchema,
-  FlowAnimationSchema,
-  PathologyType,
 } from '../types/scene.types';
-import { occlusionManager } from './OcclusionManager';
 
 // Well-known medical clinical abbreviations to canonical FMA IDs for high-reliability RAG alignment
 const MEDICAL_ABBREVIATION_MAP: Record<string, string> = {
@@ -26,18 +23,57 @@ const MEDICAL_ABBREVIATION_MAP: Record<string, string> = {
 };
 
 export class SceneController {
-  private activeSequenceAbortController: AbortController | null = null;
-  private isRunningSequence: boolean = false;
+  private stepTimers: number[] = [];
+
+  public clearTimers(): void {
+    for (const timerId of this.stepTimers) {
+      window.clearTimeout(timerId);
+    }
+    this.stepTimers = [];
+  }
+
+  /**
+   * Executes a multi-step AI choreography sequence in real time, advancing
+   * camera targets, ghosting occluding bones, pulsing organs, and animating
+   * 3D blood flow particles on schedule.
+   */
+  public playChoreography(steps: ChoreographyKeyframe[]): void {
+    this.clearTimers();
+    if (!steps || !steps.length) return;
+
+    const store = useSceneStore.getState();
+    store.loadChoreographyTimeline(steps);
+
+    let cumulativeDelayMs = 0;
+    steps.forEach((step, idx) => {
+      if (idx === 0) {
+        cumulativeDelayMs += Math.max(step.duration_ms || 3800, 2000);
+        return;
+      }
+
+      const timer = window.setTimeout(() => {
+        const currentStore = useSceneStore.getState();
+        if (!currentStore.isPlayingChoreography) return;
+        currentStore.setActiveStepIndex(idx);
+      }, cumulativeDelayMs);
+
+      this.stepTimers.push(timer);
+      cumulativeDelayMs += Math.max(step.duration_ms || 3800, 2000);
+    });
+
+    const endTimer = window.setTimeout(() => {
+      useSceneStore.getState().setIsPlayingChoreography(false);
+    }, cumulativeDelayMs);
+    this.stepTimers.push(endTimer);
+  }
 
   /**
    * Resolves any target_id to a canonical FMA ID using defensive fallback hierarchy:
    * 1. Exact match in meshRegistry
-   * 2. Exact key in manifest.structures
+   * 2. Exact key in structureMetadata or manifest.structures
    * 3. Normalized FMA ID (e.g. "fma_7101", "FMA-7101", "7101")
    * 4. Medical clinical abbreviation lookup (e.g. "LAD", "RCA", "LV")
-   * 5. Case-insensitive common_name, latin_name, or mesh_node_name in manifest
-   * 6. Fuzzy substring match in manifest
-   * 7. Returns null and logs non-fatal warning if unresolved (Rule 1 compliance)
+   * 5. Case-insensitive common_name, canonical_name, or glb_aliases
    */
   public resolveTargetId(targetId?: string): string | null {
     if (!targetId || typeof targetId !== 'string') return null;
@@ -46,323 +82,139 @@ export class SceneController {
     if (!trimmed) return null;
 
     const store = useSceneStore.getState();
-    const registry = store.meshRegistry;
-    const manifest = store.manifest;
+    const entry = store.resolveTargetEntry(trimmed);
+    if (entry) return entry.fma_id;
 
-    // 1. Exact match in active mesh registry
-    if (registry.has(trimmed)) {
-      return trimmed;
+    const lower = trimmed.toLowerCase();
+    if (MEDICAL_ABBREVIATION_MAP[lower]) {
+      return MEDICAL_ABBREVIATION_MAP[lower];
     }
 
-    // 2. Exact match in manifest structures
-    if (manifest && manifest.structures[trimmed]) {
-      return trimmed;
-    }
-
-    // 3. Normalized FMA ID check
     const normalizedUpper = trimmed.toUpperCase().replace(/[\s-]+/g, '_');
-    if (registry.has(normalizedUpper)) return normalizedUpper;
-    if (manifest && manifest.structures[normalizedUpper]) return normalizedUpper;
-
     const withFmaPrefix = normalizedUpper.startsWith('FMA_')
       ? normalizedUpper
       : `FMA_${normalizedUpper}`;
-    if (registry.has(withFmaPrefix)) return withFmaPrefix;
-    if (manifest && manifest.structures[withFmaPrefix]) return withFmaPrefix;
 
-    // 4. Clinical abbreviation lookup
-    const lower = trimmed.toLowerCase();
-    if (MEDICAL_ABBREVIATION_MAP[lower]) {
-      const mappedId = MEDICAL_ABBREVIATION_MAP[lower];
-      if (registry.has(mappedId) || (manifest && manifest.structures[mappedId])) {
-        return mappedId;
-      }
+    if (store.structureMetadata[withFmaPrefix]) {
+      return withFmaPrefix;
     }
 
-    // 5. Case-insensitive common_name, latin_name, mesh_node_name lookup in manifest
-    if (manifest) {
-      for (const meta of Object.values(manifest.structures)) {
-        if (
-          meta.common_name.toLowerCase() === lower ||
-          meta.latin_name?.toLowerCase() === lower ||
-          meta.mesh_node_name.toLowerCase() === lower
-        ) {
-          return meta.fma_id;
-        }
-      }
-
-      // 6. Substring match for common medical naming
-      for (const meta of Object.values(manifest.structures)) {
-        const common = meta.common_name.toLowerCase();
-        if (common.includes(lower) || (lower.length > 3 && lower.includes(common))) {
-          return meta.fma_id;
-        }
-      }
-    }
-
-    // Case-insensitive registry key check
-    for (const [key] of registry.entries()) {
-      if (key.toLowerCase() === lower) {
-        return key;
-      }
-    }
-
-    // Structured non-fatal warning strictly mandated by Rule 1 item 3
-    console.warn(`[SceneController] Unresolved target_id: "${targetId}"`);
     return null;
   }
 
   /**
-   * Helper to resolve an array of targets from a command object
+   * Executes a single discrete SceneCommandSchema (backwards compatible with single commands)
    */
-  public resolveTargetIds(cmd: SceneCommandSchema): string[] {
-    const rawIds: string[] = [];
-    if (cmd.target_id) rawIds.push(cmd.target_id);
-    if (cmd.target_ids && Array.isArray(cmd.target_ids)) {
-      rawIds.push(...cmd.target_ids);
-    }
-
-    const resolved = new Set<string>();
-    for (const raw of rawIds) {
-      const canonical = this.resolveTargetId(raw);
-      if (canonical) resolved.add(canonical);
-    }
-    return Array.from(resolved);
-  }
-
-  /**
-   * Deterministically execute a single 3D scene command
-   */
-  public async executeCommand(command: SceneCommandSchema): Promise<void> {
+  public executeCommand(cmd: SceneCommandSchema): void {
     const store = useSceneStore.getState();
 
-    switch (command.action) {
+    // Append to command history
+    useSceneStore.setState((state) => ({
+      commandHistory: [...state.commandHistory, cmd],
+    }));
+
+    switch (cmd.action) {
       case 'FOCUS_STRUCTURE': {
-        const targets = this.resolveTargetIds(command);
-        if (targets.length === 0) {
-          console.warn('[SceneController] FOCUS_STRUCTURE received no resolvable targets.');
-          break;
-        }
-        store.focusStructures(targets, command.camera_preset || 'anterior_oblique');
-        if (command.fade_occluders) {
-          occlusionManager.detectAndFadeOccluders(targets);
+        const resolvedId = this.resolveTargetId(cmd.target_id);
+        if (resolvedId) {
+          store.focusStructures([resolvedId], cmd.camera_preset || 'anterior');
         }
         break;
       }
 
       case 'ISOLATE_STRUCTURES': {
-        const targets = this.resolveTargetIds(command);
-        if (targets.length === 0) {
-          console.warn('[SceneController] ISOLATE_STRUCTURES received no resolvable targets.');
-          break;
-        }
-        store.isolateStructures(targets);
-        if (command.fade_occluders) {
-          occlusionManager.detectAndFadeOccluders(targets);
+        const ids = (cmd.target_ids || (cmd.target_id ? [cmd.target_id] : []))
+          .map((id) => this.resolveTargetId(id))
+          .filter((id): id is string => Boolean(id));
+
+        if (ids.length > 0) {
+          store.isolateStructures(ids);
         }
         break;
       }
 
       case 'FOCUS_AND_ISOLATE': {
-        const targets = this.resolveTargetIds(command);
-        if (targets.length > 0) {
-          store.focusStructures(targets, command.camera_preset || 'anterior_oblique');
-          store.isolateStructures(targets);
-          if (command.fade_occluders !== false) {
-            occlusionManager.detectAndFadeOccluders(targets);
-          }
-        }
-        if (command.annotation) {
-          this.executeAnnotation(command.annotation);
+        const resolvedId = this.resolveTargetId(cmd.target_id);
+        if (resolvedId) {
+          store.isolateStructures([resolvedId]);
+          store.focusStructures([resolvedId], cmd.camera_preset || 'anterior');
         }
         break;
       }
 
       case 'HIGHLIGHT_STRUCTURES': {
-        const targets = this.resolveTargetIds(command);
-        if (targets.length > 0) {
-          store.highlightStructures(targets, command.highlight_color || '#38bdf8');
+        const ids = (cmd.target_ids || (cmd.target_id ? [cmd.target_id] : []))
+          .map((id) => this.resolveTargetId(id))
+          .filter((id): id is string => Boolean(id));
+
+        if (ids.length > 0) {
+          store.highlightStructures(ids, cmd.highlight_color || '#38bdf8');
         }
         break;
       }
 
       case 'APPLY_PATHOLOGY': {
-        const pathologyType: PathologyType = command.pathology_type || 'ischemic';
-        const severity = command.severity ?? 0.8;
-        const targets = this.resolveTargetIds(command);
-
-        for (const target of targets) {
-          store.applyPathology(target, pathologyType, severity);
-        }
-
-        // Apply ischemic cascade to downstream dependent structures
-        if (command.downstream_ischemic_ids && Array.isArray(command.downstream_ischemic_ids)) {
-          for (const dsId of command.downstream_ischemic_ids) {
-            const resolved = this.resolveTargetId(dsId);
-            if (resolved) {
-              store.applyPathology(resolved, 'ischemic', Math.max(0.4, severity * 0.85));
-            }
-          }
-        }
-
-        if (command.flow_animation) {
-          this.executeFlowAnimation(command.flow_animation);
+        const resolvedId = this.resolveTargetId(cmd.target_id);
+        if (resolvedId && cmd.pathology_type) {
+          store.applyPathology(resolvedId, cmd.pathology_type, cmd.severity || 0.8);
         }
         break;
       }
 
       case 'ANIMATE_FLOW': {
-        if (command.flow_animation) {
-          this.executeFlowAnimation(command.flow_animation);
-        } else {
-          const targets = this.resolveTargetIds(command);
-          if (targets.length > 0) {
-            store.setFlowAnimation(targets, 1.0, 'oxygenated', false);
+        if (cmd.flow_animation && cmd.flow_animation.path_ids) {
+          const resolvedPaths = cmd.flow_animation.path_ids
+            .map((id) => this.resolveTargetId(id))
+            .filter((id): id is string => Boolean(id));
+
+          if (resolvedPaths.length > 0) {
+            store.setFlowAnimation(
+              resolvedPaths,
+              cmd.flow_animation.speed || 1.0,
+              cmd.flow_animation.flow_type || 'oxygenated',
+              cmd.flow_animation.blocked || false
+            );
           }
         }
         break;
       }
 
       case 'PLACE_ANNOTATION': {
-        if (command.annotation) {
-          this.executeAnnotation(command.annotation);
+        if (cmd.annotation) {
+          const resolvedId = this.resolveTargetId(cmd.annotation.target_id);
+          if (resolvedId) {
+            store.addAnnotation({
+              target_id: resolvedId,
+              title: cmd.annotation.title,
+              body: cmd.annotation.body,
+            });
+          }
         }
         break;
       }
 
       case 'RESET_SCENE': {
+        this.clearTimers();
         store.resetScene();
-        occlusionManager.restoreAll();
         break;
       }
-
-      default: {
-        console.warn(`[SceneController] Unhandled action: ${(command as any).action}`);
-      }
-    }
-
-    // Record command execution history in store
-    useSceneStore.setState((s) => ({
-      commandHistory: [...s.commandHistory, command],
-    }));
-  }
-
-  /**
-   * Helper to execute annotation command with target resolution
-   */
-  private executeAnnotation(annotation: AnnotationSchema): void {
-    const resolvedTarget = this.resolveTargetId(annotation.target_id);
-    if (resolvedTarget) {
-      useSceneStore.getState().addAnnotation({
-        ...annotation,
-        target_id: resolvedTarget,
-      });
-    } else {
-      console.warn(
-        `[SceneController] Cannot place annotation; unresolved target_id: "${annotation.target_id}"`
-      );
     }
   }
 
-  /**
-   * Helper to execute flow animation command with path resolution
-   */
-  private executeFlowAnimation(flow: FlowAnimationSchema): void {
-    const resolvedPaths: string[] = [];
-    for (const pathId of flow.path_ids) {
-      const resolved = this.resolveTargetId(pathId);
-      if (resolved) {
-        resolvedPaths.push(resolved);
-      }
+  public executeSequence(commands: SceneCommandSchema[]): void {
+    this.clearTimers();
+    if (!commands || commands.length === 0) return;
+
+    let delay = 0;
+    for (let i = 0; i < commands.length; i++) {
+      const cmd = commands[i];
+      const timer = window.setTimeout(() => {
+        this.executeCommand(cmd);
+      }, delay);
+      this.stepTimers.push(timer);
+      delay += 1200;
     }
-
-    if (resolvedPaths.length > 0) {
-      useSceneStore.getState().setFlowAnimation(
-        resolvedPaths,
-        flow.speed ?? 1.0,
-        flow.flow_type ?? 'oxygenated',
-        flow.blocked ?? false
-      );
-    } else {
-      console.warn('[SceneController] No valid path_ids resolved for flow animation.');
-    }
-  }
-
-  /**
-   * Execute a multi-step sequence of commands with configurable timing between steps
-   *
-   * @param commands Ordered list of scene commands to execute sequentially
-   * @param stepIntervalMs Time in milliseconds to pause between consecutive steps
-   */
-  public async executeSequence(
-    commands: SceneCommandSchema[],
-    stepIntervalMs: number = 1800
-  ): Promise<void> {
-    this.cancelSequence();
-
-    const abortController = new AbortController();
-    this.activeSequenceAbortController = abortController;
-    this.isRunningSequence = true;
-
-    try {
-      for (let i = 0; i < commands.length; i++) {
-        if (abortController.signal.aborted) break;
-
-        const cmd = commands[i];
-        await this.executeCommand(cmd);
-
-        if (i < commands.length - 1 && !abortController.signal.aborted) {
-          await new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(() => {
-              resolve();
-            }, stepIntervalMs);
-
-            abortController.signal.addEventListener(
-              'abort',
-              () => {
-                clearTimeout(timer);
-                reject(new Error('Sequence aborted'));
-              },
-              { once: true }
-            );
-          });
-        }
-      }
-    } catch (err: any) {
-      if (err?.message !== 'Sequence aborted') {
-        console.error('[SceneController] Error in command sequence:', err);
-      }
-    } finally {
-      if (this.activeSequenceAbortController === abortController) {
-        this.isRunningSequence = false;
-        this.activeSequenceAbortController = null;
-      }
-    }
-  }
-
-  /**
-   * Cancel any running multi-step sequence
-   */
-  public cancelSequence(): void {
-    if (this.activeSequenceAbortController) {
-      this.activeSequenceAbortController.abort();
-      this.activeSequenceAbortController = null;
-    }
-    this.isRunningSequence = false;
-  }
-
-  /**
-   * Check if a multi-step sequence is currently playing
-   */
-  public isExecutingSequence(): boolean {
-    return this.isRunningSequence;
   }
 }
 
-// Global singleton instance
 export const sceneController = new SceneController();
-
-// Expose on window in browser environment for debugging and testing
-if (typeof window !== 'undefined') {
-  (window as any).sceneController = sceneController;
-}

@@ -131,7 +131,95 @@ def test_dual_output_parser():
     print("DualOutputParser tests PASSED!\n")
 
 
+def test_adaptive_gatekeeper():
+    print("=== Testing AdaptiveGatekeeper ===")
+    from backend.app.services.adaptive_gatekeeper import adaptive_gatekeeper
+
+    # Path A: Normal anatomy query
+    dec1 = adaptive_gatekeeper.evaluate("Show me the left ventricle and mitral valve", mode="anatomy")
+    assert dec1.requires_external_rag is False
+    assert "Path A" in dec1.route_path
+    assert dec1.spatial_direction is None
+
+    # Path B: Pathology mode
+    dec2 = adaptive_gatekeeper.evaluate("What happens during myocardial ischemia?", mode="pathology")
+    assert dec2.requires_external_rag is True
+    assert "Path B" in dec2.route_path
+
+    # Path B: Anatomy mode with pathology terms
+    dec3 = adaptive_gatekeeper.evaluate("Why is there a thrombus in the LAD coronary artery?", mode="anatomy")
+    assert dec3.requires_external_rag is True
+    assert "Path B" in dec3.route_path
+
+    # Directional scanning detection
+    dec_down = adaptive_gatekeeper.evaluate("Explain the circulatory system from head to toe", mode="anatomy")
+    assert dec_down.spatial_direction == "cranio_caudal"
+
+    dec_up = adaptive_gatekeeper.evaluate("Trace venous blood flow ascending from toe to head", mode="anatomy")
+    assert dec_up.spatial_direction == "caudo_cranial"
+
+    print("AdaptiveGatekeeper tests PASSED!\n")
+
+
+def test_ncbi_cloud_rag_caching_and_limiter():
+    print("=== Testing NCBICloudRAG Caching and Limiter ===")
+    from backend.app.services.ncbi_cloud_rag import ncbi_cloud_rag
+
+    # Verify limiter rate
+    assert ncbi_cloud_rag.limiter.max_rate in [3.0, 10.0]
+
+    # Verify local read-through cache
+    test_query = "acute myocardial infarction pathophysiology"
+    test_chunk = {
+        "source_id": "NBK459269",
+        "source_type": "StatPearls",
+        "title": "Acute Myocardial Infarction",
+        "section_heading": "Pathophysiology",
+        "content": "Test abstract for caching validation.",
+        "citation_url": "https://www.ncbi.nlm.nih.gov/books/NBK459269/"
+    }
+
+    # Store in cache
+    ncbi_cloud_rag.cache_result(test_query, [test_chunk])
+
+    # Retrieve from cache
+    cached = ncbi_cloud_rag.get_cached(test_query)
+    assert cached is not None
+    assert len(cached) == 1
+    assert cached[0]["source_id"] == "NBK459269"
+
+    print("NCBICloudRAG Caching and Limiter tests PASSED!\n")
+
+
+def test_spatial_ranking():
+    print("=== Testing Cranio-Caudal & Caudo-Cranial Spatial Ranking ===")
+    # Head-to-Toe retrieval
+    ctx_down = rag_retriever.retrieve(
+        "Scan structures from head to toe",
+        mode="anatomy"
+    )
+    ranks_down = [s.get("cranio_caudal_rank") for s in ctx_down.relevant_structures if s.get("cranio_caudal_rank") is not None]
+    assert len(ranks_down) > 0
+    # Verify non-decreasing order
+    assert ranks_down == sorted(ranks_down), f"Expected ascending cranio_caudal_rank: {ranks_down}"
+
+    # Toe-to-Head retrieval
+    ctx_up = rag_retriever.retrieve(
+        "Scan structures from toe to head",
+        mode="anatomy"
+    )
+    ranks_up = [s.get("caudo_cranial_rank") for s in ctx_up.relevant_structures if s.get("caudo_cranial_rank") is not None]
+    assert len(ranks_up) > 0
+    # Verify non-decreasing order
+    assert ranks_up == sorted(ranks_up), f"Expected ascending caudo_cranial_rank: {ranks_up}"
+
+    print("Spatial Ranking tests PASSED!\n")
+
+
 if __name__ == "__main__":
     test_rag_retriever()
     test_dual_output_parser()
+    test_adaptive_gatekeeper()
+    test_ncbi_cloud_rag_caching_and_limiter()
+    test_spatial_ranking()
     print("ALL BACKEND SERVICE TESTS COMPLETED SUCCESSFULLY!")

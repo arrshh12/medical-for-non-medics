@@ -4,6 +4,7 @@ import { SceneCommandSchema } from '../types/scene.types';
 export interface SSECallbacks {
   onTextDelta: (delta: string) => void;
   onSceneCommand: (command: SceneCommandSchema) => void;
+  onSceneChoreography?: (steps: any[]) => void;
   onCitation: (citation: CitationItem) => void;
   onGroundingStatus: (status: 'verified' | 'unverified', maxSimilarity: number) => void;
   onDone: () => void;
@@ -71,6 +72,11 @@ export async function streamChatCompletion(
             callbacks.onTextDelta(parsedData.delta || '');
           } else if (eventType === 'scene_command') {
             callbacks.onSceneCommand(parsedData);
+          } else if (eventType === 'scene_choreography') {
+            if (callbacks.onSceneChoreography) {
+              const steps = Array.isArray(parsedData) ? parsedData : (parsedData.steps || []);
+              callbacks.onSceneChoreography(steps);
+            }
           } else if (eventType === 'citation') {
             callbacks.onCitation(parsedData);
           } else if (eventType === 'grounding_status') {

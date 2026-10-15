@@ -1,10 +1,32 @@
 {
   "FMA_7088": {
     "fma_id": "FMA_7088",
-    "mesh_node_name": "mesh_heart_organ",
+    "canonical_name": "Heart",
     "common_name": "Heart",
-    "latin_name": "Cor",
+    "mesh_node_name": "Heart",
+    "glb_aliases": [
+      "Heart",
+      "VH_F_Heart",
+      "heart",
+      "Myocardium",
+      "Left_Ventricle",
+      "Right_Ventricle",
+      "Atrium"
+    ],
     "organ_system": "cardiovascular",
+    "spatial_zone_code": "ZONE_05_HEART_MEDIASTINUM",
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8,
+    "occluding_fma_ids": [
+      "FMA_7485",
+      "FMA_7480",
+      "FMA_7195"
+    ],
+    "supplies_fma_ids": [
+      "FMA_3734",
+      "FMA_3939",
+      "FMA_50801"
+    ],
     "centroid": [
       0.0,
       0.0,
@@ -21,7 +43,8 @@
       0.65
     ],
     "bounding_radius": 1.25,
-    "description_summary": "Four-chambered muscular organ that pumps blood through the circulatory system."
+    "description_summary": "Four-chambered muscular pump in the middle mediastinum that propels oxygenated blood from the left ventricle into the systemic arterial circulation via the aorta at ~5 L/min.",
+    "canonical_physiology_summary": "Four-chambered muscular pump in the middle mediastinum that propels oxygenated blood from the left ventricle into the systemic arterial circulation via the aorta at ~5 L/min."
   },
   "FMA_7096": {
     "fma_id": "FMA_7096",
@@ -45,7 +68,16 @@
       0.4
     ],
     "bounding_radius": 0.5,
-    "description_summary": "Receives deoxygenated systemic venous blood from the superior and inferior venae cavae."
+    "description_summary": "Receives deoxygenated systemic venous blood from the superior and inferior venae cavae.",
+    "canonical_name": "Right Atrium",
+    "glb_aliases": [
+      "Right Atrium",
+      "mesh_right_atrium"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7098": {
     "fma_id": "FMA_7098",
@@ -69,7 +101,16 @@
       0.6
     ],
     "bounding_radius": 0.6,
-    "description_summary": "Pumps deoxygenated blood through the pulmonary valve into the pulmonary trunk."
+    "description_summary": "Pumps deoxygenated blood through the pulmonary valve into the pulmonary trunk.",
+    "canonical_name": "Right Ventricle",
+    "glb_aliases": [
+      "Right Ventricle",
+      "mesh_right_ventricle"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7097": {
     "fma_id": "FMA_7097",
@@ -93,7 +134,16 @@
       0.05
     ],
     "bounding_radius": 0.5,
-    "description_summary": "Receives oxygenated blood returning from the pulmonary veins."
+    "description_summary": "Receives oxygenated blood returning from the pulmonary veins.",
+    "canonical_name": "Left Atrium",
+    "glb_aliases": [
+      "Left Atrium",
+      "mesh_left_atrium"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7099": {
     "fma_id": "FMA_7099",
@@ -117,7 +167,16 @@
       0.4
     ],
     "bounding_radius": 0.72,
-    "description_summary": "Thick muscular chamber that generates systemic pressure to pump oxygenated blood into the aorta."
+    "description_summary": "Thick muscular chamber that generates systemic pressure to pump oxygenated blood into the aorta.",
+    "canonical_name": "Left Ventricle",
+    "glb_aliases": [
+      "Left Ventricle",
+      "mesh_left_ventricle"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7234": {
     "fma_id": "FMA_7234",
@@ -141,7 +200,16 @@
       0.35
     ],
     "bounding_radius": 0.22,
-    "description_summary": "Atrioventricular valve between right atrium and right ventricle preventing systolic backflow."
+    "description_summary": "Atrioventricular valve between right atrium and right ventricle preventing systolic backflow.",
+    "canonical_name": "Tricuspid Valve",
+    "glb_aliases": [
+      "Tricuspid Valve",
+      "mesh_tricuspid_valve"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7236": {
     "fma_id": "FMA_7236",
@@ -165,7 +233,16 @@
       0.05
     ],
     "bounding_radius": 0.22,
-    "description_summary": "Bicuspid valve between left atrium and left ventricle."
+    "description_summary": "Bicuspid valve between left atrium and left ventricle.",
+    "canonical_name": "Mitral Valve",
+    "glb_aliases": [
+      "Mitral Valve",
+      "mesh_mitral_valve"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7237": {
     "fma_id": "FMA_7237",
@@ -189,7 +266,16 @@
       0.48
     ],
     "bounding_radius": 0.2,
-    "description_summary": "Semilunar valve preventing backflow from pulmonary trunk into right ventricle."
+    "description_summary": "Semilunar valve preventing backflow from pulmonary trunk into right ventricle.",
+    "canonical_name": "Pulmonary Valve",
+    "glb_aliases": [
+      "Pulmonary Valve",
+      "mesh_pulmonary_valve"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7238": {
     "fma_id": "FMA_7238",
@@ -213,7 +299,16 @@
       0.2
     ],
     "bounding_radius": 0.2,
-    "description_summary": "Semilunar valve between left ventricle and ascending aorta."
+    "description_summary": "Semilunar valve between left ventricle and ascending aorta.",
+    "canonical_name": "Aortic Valve",
+    "glb_aliases": [
+      "Aortic Valve",
+      "mesh_aortic_valve"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7101": {
     "fma_id": "FMA_7101",
@@ -237,7 +332,16 @@
       0.58
     ],
     "bounding_radius": 0.48,
-    "description_summary": "Critical coronary branch supplying the anterior wall of left ventricle and anterior 2/3 of interventricular septum."
+    "description_summary": "Critical coronary branch supplying the anterior wall of left ventricle and anterior 2/3 of interventricular septum.",
+    "canonical_name": "Left Anterior Descending Coronary Artery",
+    "glb_aliases": [
+      "Left Anterior Descending Coronary Artery",
+      "mesh_lad_artery"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7100": {
     "fma_id": "FMA_7100",
@@ -261,7 +365,16 @@
       0.45
     ],
     "bounding_radius": 0.5,
-    "description_summary": "Supplies the right atrium, right ventricle, sinus node, and posterior descending territory."
+    "description_summary": "Supplies the right atrium, right ventricle, sinus node, and posterior descending territory.",
+    "canonical_name": "Right Coronary Artery",
+    "glb_aliases": [
+      "Right Coronary Artery",
+      "mesh_rca_artery"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7105": {
     "fma_id": "FMA_7105",
@@ -285,7 +398,16 @@
       0.35
     ],
     "bounding_radius": 0.38,
-    "description_summary": "Branches from left main artery and wraps into coronary sulcus supplying the lateral and posterior left ventricle."
+    "description_summary": "Branches from left main artery and wraps into coronary sulcus supplying the lateral and posterior left ventricle.",
+    "canonical_name": "Left Circumflex Coronary Artery",
+    "glb_aliases": [
+      "Left Circumflex Coronary Artery",
+      "mesh_lcx_artery"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_9462": {
     "fma_id": "FMA_9462",
@@ -309,7 +431,16 @@
       0.4
     ],
     "bounding_radius": 0.45,
-    "description_summary": "Muscular dividing wall between ventricles, vulnerable to ischemia when LAD is occluded."
+    "description_summary": "Muscular dividing wall between ventricles, vulnerable to ischemia when LAD is occluded.",
+    "canonical_name": "Anterior Interventricular Septum",
+    "glb_aliases": [
+      "Anterior Interventricular Septum",
+      "mesh_interventricular_septum"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7163": {
     "fma_id": "FMA_7163",
@@ -333,31 +464,61 @@
       0.3
     ],
     "bounding_radius": 0.35,
-    "description_summary": "Inferior conical extremity of left ventricle, distal vascular terminus of LAD supply."
+    "description_summary": "Inferior conical extremity of left ventricle, distal vascular terminus of LAD supply.",
+    "canonical_name": "Left Ventricular Apex",
+    "glb_aliases": [
+      "Left Ventricular Apex",
+      "mesh_left_ventricular_apex"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_3734": {
     "fma_id": "FMA_3734",
-    "mesh_node_name": "mesh_ascending_aorta",
-    "common_name": "Ascending Aorta",
-    "latin_name": "Aorta ascendens",
-    "organ_system": "cardiovascular",
-    "centroid": [
-      -0.05,
-      0.7,
-      0.12
+    "canonical_name": "Aorta & Aortic Arch",
+    "common_name": "Aorta & Aortic Arch",
+    "mesh_node_name": "Aorta",
+    "glb_aliases": [
+      "Aorta",
+      "VH_F_Aorta",
+      "Aortic_Arch",
+      "Ascending_Aorta",
+      "Thoracic_Aorta"
     ],
-    "bbox_min": [
-      -0.22,
+    "organ_system": "cardiovascular",
+    "spatial_zone_code": "ZONE_05_HEART_MEDIASTINUM",
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8,
+    "occluding_fma_ids": [
+      "FMA_7485",
+      "FMA_7480"
+    ],
+    "supplies_fma_ids": [
+      "FMA_3939",
+      "FMA_50801",
+      "FMA_7197",
+      "FMA_7203"
+    ],
+    "centroid": [
+      0.0,
       0.35,
       -0.05
     ],
-    "bbox_max": [
-      0.12,
-      1.05,
-      0.3
+    "bbox_min": [
+      -0.25,
+      0.0,
+      -0.2
     ],
-    "bounding_radius": 0.45,
-    "description_summary": "Initial portion of the systemic arterial tree carrying oxygenated blood from aortic valve."
+    "bbox_max": [
+      0.25,
+      0.7,
+      0.15
+    ],
+    "bounding_radius": 0.8,
+    "description_summary": "The largest elastic artery in the body; originates at the left ventricle via the aortic valve, arches superiorly to give off the brachiocephalic, left common carotid, and left subclavian arteries.",
+    "canonical_physiology_summary": "The largest elastic artery in the body; originates at the left ventricle via the aortic valve, arches superiorly to give off the brachiocephalic, left common carotid, and left subclavian arteries that supply oxygenated blood to the head, neck, and brain."
   },
   "FMA_3735": {
     "fma_id": "FMA_3735",
@@ -381,7 +542,16 @@
       0.15
     ],
     "bounding_radius": 0.65,
-    "description_summary": "Curved vessel segment branching into brachiocephalic trunk, left common carotid, and left subclavian arteries."
+    "description_summary": "Curved vessel segment branching into brachiocephalic trunk, left common carotid, and left subclavian arteries.",
+    "canonical_name": "Aortic Arch",
+    "glb_aliases": [
+      "Aortic Arch",
+      "mesh_aortic_arch"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_4720": {
     "fma_id": "FMA_4720",
@@ -405,7 +575,16 @@
       0.1
     ],
     "bounding_radius": 0.48,
-    "description_summary": "Returns deoxygenated venous blood from the head, neck, upper limbs, and chest to the right atrium."
+    "description_summary": "Returns deoxygenated venous blood from the head, neck, upper limbs, and chest to the right atrium.",
+    "canonical_name": "Superior Vena Cava",
+    "glb_aliases": [
+      "Superior Vena Cava",
+      "mesh_superior_vena_cava"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_4721": {
     "fma_id": "FMA_4721",
@@ -429,7 +608,16 @@
       0.05
     ],
     "bounding_radius": 0.42,
-    "description_summary": "Large vein carrying deoxygenated blood from lower body and abdomen to right atrium."
+    "description_summary": "Large vein carrying deoxygenated blood from lower body and abdomen to right atrium.",
+    "canonical_name": "Inferior Vena Cava",
+    "glb_aliases": [
+      "Inferior Vena Cava",
+      "mesh_inferior_vena_cava"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_8614": {
     "fma_id": "FMA_8614",
@@ -453,7 +641,16 @@
       0.5
     ],
     "bounding_radius": 0.42,
-    "description_summary": "Arterial vessel arising from right ventricle that divides into left and right pulmonary arteries."
+    "description_summary": "Arterial vessel arising from right ventricle that divides into left and right pulmonary arteries.",
+    "canonical_name": "Pulmonary Trunk",
+    "glb_aliases": [
+      "Pulmonary Trunk",
+      "mesh_pulmonary_trunk"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7309": {
     "fma_id": "FMA_7309",
@@ -477,7 +674,16 @@
       0.6
     ],
     "bounding_radius": 1.45,
-    "description_summary": "Three-lobed respiratory organ responsible for gas exchange on right side of thoracic cavity."
+    "description_summary": "Three-lobed respiratory organ responsible for gas exchange on right side of thoracic cavity.",
+    "canonical_name": "Right Lung",
+    "glb_aliases": [
+      "Right Lung",
+      "mesh_right_lung"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7310": {
     "fma_id": "FMA_7310",
@@ -501,7 +707,16 @@
       0.6
     ],
     "bounding_radius": 1.35,
-    "description_summary": "Two-lobed respiratory organ with cardiac notch accommodating the heart."
+    "description_summary": "Two-lobed respiratory organ with cardiac notch accommodating the heart.",
+    "canonical_name": "Left Lung",
+    "glb_aliases": [
+      "Left Lung",
+      "mesh_left_lung"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7394": {
     "fma_id": "FMA_7394",
@@ -525,55 +740,92 @@
       -0.15
     ],
     "bounding_radius": 0.55,
-    "description_summary": "Cartilaginous windpipe conducting air from larynx to bronchi."
+    "description_summary": "Cartilaginous windpipe conducting air from larynx to bronchi.",
+    "canonical_name": "Trachea",
+    "glb_aliases": [
+      "Trachea",
+      "mesh_trachea"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
   },
   "FMA_7485": {
     "fma_id": "FMA_7485",
-    "mesh_node_name": "mesh_sternum",
+    "canonical_name": "Sternum",
     "common_name": "Sternum",
-    "latin_name": "Sternum",
+    "mesh_node_name": "Sternum",
+    "glb_aliases": [
+      "Sternum",
+      "VH_F_Sternum",
+      "Breastbone",
+      "Manubrium"
+    ],
     "organ_system": "skeletal",
+    "spatial_zone_code": "ZONE_04_THORACIC_WALL_LUNGS",
+    "cranio_caudal_rank": 4,
+    "caudo_cranial_rank": 9,
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
     "centroid": [
       0.0,
-      0.2,
-      1.1
+      0.25,
+      0.45
     ],
     "bbox_min": [
-      -0.25,
-      -0.7,
-      0.95
+      -0.15,
+      0.05,
+      0.4
     ],
     "bbox_max": [
-      0.25,
-      1.1,
-      1.25
+      0.15,
+      0.55,
+      0.5
     ],
-    "bounding_radius": 0.95,
-    "description_summary": "Flat anterior breastbone protecting heart and great vessels."
+    "bounding_radius": 0.45,
+    "description_summary": "Flat T-shaped bone in the anterior midline of the thorax that shields the heart and great vessels.",
+    "canonical_physiology_summary": "Flat T-shaped bone in the anterior midline of the thorax (manubrium, body, and xiphoid process) that articulates with the clavicles and costal cartilages of ribs 1-7 to shield the heart and great vessels."
   },
   "FMA_7480": {
     "fma_id": "FMA_7480",
-    "mesh_node_name": "mesh_ribcage",
-    "common_name": "Ribcage & Costal Cartilage",
-    "latin_name": "Cavea thoracis",
+    "canonical_name": "Rib Cage & Thoracic Skeleton",
+    "common_name": "Rib Cage",
+    "mesh_node_name": "Rib_Cage",
+    "glb_aliases": [
+      "Rib_Cage",
+      "Ribs",
+      "VH_F_Rib_Cage",
+      "Thoracic_Cage",
+      "Skeleton",
+      "Pelvis",
+      "Spinal_Cord",
+      "Clavicle"
+    ],
     "organ_system": "skeletal",
+    "spatial_zone_code": "ZONE_04_THORACIC_WALL_LUNGS",
+    "cranio_caudal_rank": 4,
+    "caudo_cranial_rank": 9,
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
     "centroid": [
       0.0,
-      0.0,
-      0.2
+      0.15,
+      0.0
     ],
     "bbox_min": [
-      -2.2,
-      -1.2,
-      -1.3
+      -0.65,
+      -0.4,
+      -0.35
     ],
     "bbox_max": [
-      2.2,
-      1.4,
-      1.3
+      0.65,
+      0.65,
+      0.45
     ],
-    "bounding_radius": 2.2,
-    "description_summary": "Thoracic cage enclosing and shielding cardiac and respiratory structures."
+    "bounding_radius": 1.1,
+    "description_summary": "Twelve pairs of curved ribs articulating posteriorly with the thoracic vertebrae and anteriorly with the sternum to protect thoracic viscera and assist respiratory mechanics.",
+    "canonical_physiology_summary": "Twelve pairs of curved ribs articulating posteriorly with the thoracic vertebrae and anteriorly with the sternum to protect thoracic viscera and assist respiratory mechanics."
   },
   "FMA_9139": {
     "fma_id": "FMA_9139",
@@ -597,6 +849,253 @@
       -1.1
     ],
     "bounding_radius": 1.6,
-    "description_summary": "Posterior bony axis supporting rib articulation and spinal canal."
+    "description_summary": "Posterior bony axis supporting rib articulation and spinal canal.",
+    "canonical_name": "Thoracic Spine",
+    "glb_aliases": [
+      "Thoracic Spine",
+      "mesh_thoracic_spine"
+    ],
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "cranio_caudal_rank": 5,
+    "caudo_cranial_rank": 8
+  },
+  "FMA_3939": {
+    "fma_id": "FMA_3939",
+    "canonical_name": "Common & Internal Carotid Arteries",
+    "common_name": "Carotid Arteries",
+    "mesh_node_name": "Carotid",
+    "glb_aliases": [
+      "Carotid",
+      "Common_Carotid",
+      "Internal_Carotid",
+      "VH_F_Carotid",
+      "Blood_Vasculature",
+      "Neck_Artery"
+    ],
+    "organ_system": "cardiovascular",
+    "spatial_zone_code": "ZONE_03_NECK_CERVICAL",
+    "cranio_caudal_rank": 3,
+    "caudo_cranial_rank": 10,
+    "occluding_fma_ids": [
+      "FMA_24138"
+    ],
+    "supplies_fma_ids": [
+      "FMA_50801"
+    ],
+    "centroid": [
+      0.0,
+      0.85,
+      0.05
+    ],
+    "bbox_min": [
+      -0.2,
+      0.65,
+      -0.1
+    ],
+    "bbox_max": [
+      0.2,
+      1.05,
+      0.15
+    ],
+    "bounding_radius": 0.5,
+    "description_summary": "Paired cervical arteries ascending through the neck inside the carotid sheath to deliver oxygenated blood directly from the aortic arch into the Circle of Willis and cerebral hemispheres.",
+    "canonical_physiology_summary": "Paired cervical arteries ascending through the neck inside the carotid sheath to deliver oxygenated blood directly from the aortic arch into the Circle of Willis and cerebral hemispheres."
+  },
+  "FMA_50801": {
+    "fma_id": "FMA_50801",
+    "canonical_name": "Brain",
+    "common_name": "Brain",
+    "mesh_node_name": "Brain",
+    "glb_aliases": [
+      "Brain",
+      "VH_F_Brain",
+      "Cerebrum",
+      "Cerebral_Cortex",
+      "Encephalon"
+    ],
+    "organ_system": "nervous",
+    "spatial_zone_code": "ZONE_01_CRANIUM_BRAIN",
+    "cranio_caudal_rank": 1,
+    "caudo_cranial_rank": 12,
+    "occluding_fma_ids": [
+      "FMA_46565"
+    ],
+    "supplies_fma_ids": [],
+    "centroid": [
+      0.0,
+      1.45,
+      0.0
+    ],
+    "bbox_min": [
+      -0.35,
+      1.25,
+      -0.4
+    ],
+    "bbox_max": [
+      0.35,
+      1.65,
+      0.4
+    ],
+    "bounding_radius": 0.6,
+    "description_summary": "Central command organ of the nervous system housed within the cranial vault; consumes ~20% of total body oxygen and requires continuous arterial perfusion.",
+    "canonical_physiology_summary": "Central command organ of the nervous system housed within the cranial vault; consumes ~20% of total body oxygen and requires continuous arterial perfusion via the internal carotid and vertebral arteries."
+  },
+  "FMA_46565": {
+    "fma_id": "FMA_46565",
+    "canonical_name": "Skull & Cranium",
+    "common_name": "Skull & Cranium",
+    "mesh_node_name": "Skull",
+    "glb_aliases": [
+      "Skull",
+      "Cranium",
+      "VH_F_Skull",
+      "Head_Bone",
+      "Calvaria"
+    ],
+    "organ_system": "skeletal",
+    "spatial_zone_code": "ZONE_01_CRANIUM_BRAIN",
+    "cranio_caudal_rank": 1,
+    "caudo_cranial_rank": 12,
+    "occluding_fma_ids": [],
+    "supplies_fma_ids": [],
+    "centroid": [
+      0.0,
+      1.45,
+      0.0
+    ],
+    "bbox_min": [
+      -0.4,
+      1.2,
+      -0.45
+    ],
+    "bbox_max": [
+      0.4,
+      1.7,
+      0.45
+    ],
+    "bounding_radius": 0.7,
+    "description_summary": "Bony endoskeletal vault composed of cranial and facial bones that encases and protects the brain, meninges, and special sense organs.",
+    "canonical_physiology_summary": "Bony endoskeletal vault composed of cranial and facial bones that encases and protects the brain, meninges, and special sense organs."
+  },
+  "FMA_7195": {
+    "fma_id": "FMA_7195",
+    "canonical_name": "Lungs (Right & Left)",
+    "common_name": "Lungs",
+    "mesh_node_name": "Lungs",
+    "glb_aliases": [
+      "Lung",
+      "Lungs",
+      "VH_F_Lung",
+      "Right_Lung",
+      "Left_Lung",
+      "Respiratory_System",
+      "Pulmonary"
+    ],
+    "organ_system": "respiratory",
+    "spatial_zone_code": "ZONE_04_THORACIC_WALL_LUNGS",
+    "cranio_caudal_rank": 4,
+    "caudo_cranial_rank": 9,
+    "occluding_fma_ids": [
+      "FMA_7480",
+      "FMA_7485"
+    ],
+    "supplies_fma_ids": [
+      "FMA_7088"
+    ],
+    "centroid": [
+      0.0,
+      0.15,
+      0.0
+    ],
+    "bbox_min": [
+      -0.6,
+      -0.3,
+      -0.3
+    ],
+    "bbox_max": [
+      0.6,
+      0.6,
+      0.3
+    ],
+    "bounding_radius": 0.95,
+    "description_summary": "Paired spongy respiratory organs in the pleural cavities responsible for alveolar gas exchange.",
+    "canonical_physiology_summary": "Paired spongy respiratory organs in the pleural cavities responsible for alveolar gas exchange: oxygenating venous blood from the right ventricle and expelling carbon dioxide."
+  },
+  "FMA_7197": {
+    "fma_id": "FMA_7197",
+    "canonical_name": "Liver",
+    "common_name": "Liver",
+    "mesh_node_name": "Liver",
+    "glb_aliases": [
+      "Liver",
+      "VH_F_Liver",
+      "Hepatic"
+    ],
+    "organ_system": "digestive",
+    "spatial_zone_code": "ZONE_07_ABDOMEN_UPPER_GI",
+    "cranio_caudal_rank": 7,
+    "caudo_cranial_rank": 6,
+    "occluding_fma_ids": [
+      "FMA_7480"
+    ],
+    "supplies_fma_ids": [],
+    "centroid": [
+      0.2,
+      -0.25,
+      0.1
+    ],
+    "bbox_min": [
+      -0.1,
+      -0.5,
+      -0.2
+    ],
+    "bbox_max": [
+      0.55,
+      0.0,
+      0.3
+    ],
+    "bounding_radius": 0.7,
+    "description_summary": "Largest internal organ and metabolic gland located in the right upper quadrant beneath the diaphragm.",
+    "canonical_physiology_summary": "Largest internal organ and metabolic gland located in the right upper quadrant beneath the diaphragm; filters portal venous blood, synthesizes plasma proteins, detoxifies metabolites, and secretes bile."
+  },
+  "FMA_7203": {
+    "fma_id": "FMA_7203",
+    "canonical_name": "Kidneys (Right & Left)",
+    "common_name": "Kidneys",
+    "mesh_node_name": "Kidneys",
+    "glb_aliases": [
+      "Kidney",
+      "Kidneys",
+      "VH_F_Kidney_Left",
+      "VH_F_Kidney_Right",
+      "Renal"
+    ],
+    "organ_system": "urinary",
+    "spatial_zone_code": "ZONE_08_ABDOMEN_RETROPERITONEAL_LOWER_GI",
+    "cranio_caudal_rank": 8,
+    "caudo_cranial_rank": 5,
+    "occluding_fma_ids": [
+      "FMA_7197"
+    ],
+    "supplies_fma_ids": [],
+    "centroid": [
+      0.0,
+      -0.45,
+      -0.15
+    ],
+    "bbox_min": [
+      -0.35,
+      -0.65,
+      -0.25
+    ],
+    "bbox_max": [
+      0.35,
+      -0.25,
+      -0.05
+    ],
+    "bounding_radius": 0.5,
+    "description_summary": "Bean-shaped retroperitoneal organs that filter plasma to regulate fluid, electrolyte, and acid-base balance.",
+    "canonical_physiology_summary": "Bean-shaped retroperitoneal organs that filter ~180 liters of plasma daily through millions of nephrons to regulate fluid, electrolyte, and acid-base balance and blood pressure."
   }
 }

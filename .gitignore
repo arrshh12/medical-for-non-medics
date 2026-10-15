@@ -18,6 +18,11 @@ build/
 .cache/
 .pytest_cache/
 
+# Large binary 3D assets (fetchable via backend/scripts/fetch_and_index_real_glb.py)
+*.glb
+*.gltf
+*.bin
+
 # Logs
 *.log
 

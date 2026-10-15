@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     DEFAULT_OPENAI_API_KEY: str = ""
     DEFAULT_MODEL_ID: str = "gpt-4o"
 
+    # NIH / NCBI E-utilities Settings
+    NCBI_API_KEY: str = ""
+    NCBI_TOOL: str = "HoloMed3D"
+    NCBI_EMAIL: str = "support@holomed3d.local"
+
     # CORS
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",

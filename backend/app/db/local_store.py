@@ -58,7 +58,11 @@ class LocalAnatomicalStore:
 
         if struct_file.exists():
             with open(struct_file, "r", encoding="utf-8") as f:
-                self.structures = json.load(f)
+                loaded_structs = json.load(f)
+                if isinstance(loaded_structs, list):
+                    self.structures = {item["fma_id"]: item for item in loaded_structs if "fma_id" in item}
+                else:
+                    self.structures = loaded_structs
 
         if graph_file.exists():
             with open(graph_file, "r", encoding="utf-8") as f:

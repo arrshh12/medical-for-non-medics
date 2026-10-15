@@ -1,329 +1,291 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { useFrame, ThreeEvent } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { ThreeEvent } from '@react-three/fiber';
 import { useSceneStore } from '../store/useSceneStore';
-import { ManifestData, AnatomicalStructureMeta } from '../types/scene.types';
-import { applyTissueStateToMaterial } from './pathology/TissueStateShader';
+import type { AnatomicalStructureMeta, RegisteredMeshEntry } from '../types/scene.types';
+import { checkRayCylinderOcclusion } from './OcclusionManager';
 
-// Procedural geometry factory for each anatomical structure type
-function createOrganGeometry(meta: AnatomicalStructureMeta): THREE.BufferGeometry {
-  const r = meta.bounding_radius;
-  const sys = meta.organ_system;
-  const id = meta.fma_id;
+const SYSTEM_PALETTE: Record<string, { color: string; roughness: number; metalness: number }> = {
+  skeletal: { color: '#e8dfd1', roughness: 0.48, metalness: 0.05 },       // Cortical ivory bone
+  cardiovascular: { color: '#b91c1c', roughness: 0.32, metalness: 0.08 }, // Myocardial/Arterial crimson
+  nervous: { color: '#f4b4c4', roughness: 0.42, metalness: 0.04 },        // Cerebral gyri pink-beige
+  respiratory: { color: '#c08497', roughness: 0.55, metalness: 0.02 },    // Pulmonary parenchymal rose
+  digestive: { color: '#8d4024', roughness: 0.38, metalness: 0.05 },      // Hepatic/Gastric sienna
+  urinary: { color: '#7c2d12', roughness: 0.40, metalness: 0.06 },        // Renal cortex brown-red
+  skin: { color: '#94a3b8', roughness: 0.70, metalness: 0.0 },
+};
 
-  // Vessels (arteries, veins, aorta)
-  if (id.includes('7101') || id.includes('7100') || id.includes('7105')) {
-    // Coronary arteries: branching curving tubular path
-    const curve = new THREE.CubicBezierCurve3(
-      new THREE.Vector3(meta.bbox_min[0], meta.bbox_max[1], meta.bbox_min[2]),
-      new THREE.Vector3(meta.centroid[0] * 1.1, meta.centroid[1] + 0.1, meta.centroid[2]),
-      new THREE.Vector3(meta.centroid[0], meta.centroid[1] - 0.1, meta.centroid[2] * 1.1),
-      new THREE.Vector3(meta.bbox_max[0], meta.bbox_min[1], meta.bbox_max[2])
-    );
-    return new THREE.TubeGeometry(curve, 24, 0.045, 8, false);
+function classifyNodeToFma(
+  nodeName: string,
+  centerYNormalized: number,
+  manifestList: AnatomicalStructureMeta[]
+): AnatomicalStructureMeta {
+  const clean = nodeName.toLowerCase();
+  for (const item of manifestList) {
+    if (
+      item.fma_id.toLowerCase() === clean ||
+      item.common_name.toLowerCase() === clean ||
+      (item.canonical_name && item.canonical_name.toLowerCase() === clean) ||
+      (item.glb_aliases ?? []).some((a) => clean.includes(a.toLowerCase()))
+    ) {
+      return item;
+    }
   }
 
-  if (id === 'FMA_3734' || id === 'FMA_3735') {
-    // Aorta & Aortic Arch: majestic thick curved tube
-    const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-0.05, 0.35, 0.15),
-      new THREE.Vector3(-0.05, 0.9, 0.12),
-      new THREE.Vector3(-0.1, 1.35, -0.05),
-      new THREE.Vector3(-0.25, 1.15, -0.2),
-      new THREE.Vector3(-0.25, 0.5, -0.25)
-    ]);
-    return new THREE.TubeGeometry(curve, 32, 0.14, 16, false);
+  // Heuristic anatomical classifier for sub-nodes inside the NIH Visible Human GLB
+  if (clean.includes('brain') || clean.includes('cerebr') || clean.includes('encephal')) {
+    return manifestList.find((m) => m.fma_id === 'FMA_50801') ?? manifestList[0];
   }
-
-  if (id === 'FMA_4720' || id === 'FMA_4721') {
-    // Venae Cavae: vertical venous cylinder
-    const height = Math.abs(meta.bbox_max[1] - meta.bbox_min[1]) || 0.8;
-    return new THREE.CylinderGeometry(0.12, 0.12, height, 16);
+  if (clean.includes('skull') || clean.includes('crani') || (clean.includes('bone') && centerYNormalized > 0.82)) {
+    return manifestList.find((m) => m.fma_id === 'FMA_46565') ?? manifestList[0];
   }
-
-  if (id === 'FMA_8614') {
-    // Pulmonary trunk: wide bifurcating conduit
-    return new THREE.CylinderGeometry(0.13, 0.14, 0.5, 16);
+  if (clean.includes('heart') || clean.includes('ventricle') || clean.includes('atrium') || clean.includes('coronary') || clean.includes('myocardi')) {
+    return manifestList.find((m) => m.fma_id === 'FMA_7088') ?? manifestList[0];
   }
-
-  // Heart chambers
-  if (id === 'FMA_7099') {
-    // Left Ventricle: thick conical ellipsoid
-    const geom = new THREE.SphereGeometry(r * 0.9, 24, 24);
-    geom.scale(0.85, 1.25, 0.85);
-    return geom;
+  if (clean.includes('carotid') || clean.includes('jugular') || (clean.includes('vasculature') && centerYNormalized > 0.7)) {
+    return manifestList.find((m) => m.fma_id === 'FMA_3939') ?? manifestList[0];
   }
-
-  if (id === 'FMA_7098') {
-    // Right Ventricle: crescent wrapping shape
-    const geom = new THREE.SphereGeometry(r * 0.85, 24, 24);
-    geom.scale(0.9, 1.1, 0.7);
-    return geom;
+  if (clean.includes('aorta') || clean.includes('artery') || clean.includes('vein')) {
+    return manifestList.find((m) => m.fma_id === 'FMA_3734') ?? manifestList[0];
   }
-
-  if (id === 'FMA_7096' || id === 'FMA_7097') {
-    // Atria: rounded auricle domes
-    const geom = new THREE.SphereGeometry(r * 0.85, 20, 20);
-    geom.scale(1.0, 0.9, 0.9);
-    return geom;
+  if (clean.includes('sternum') || clean.includes('manubrium')) {
+    return manifestList.find((m) => m.fma_id === 'FMA_7485') ?? manifestList[0];
   }
-
-  // Heart Valves
-  if (id.includes('7234') || id.includes('7236') || id.includes('7237') || id.includes('7238')) {
-    return new THREE.TorusGeometry(r * 0.8, 0.025, 12, 24);
+  if (clean.includes('lung') || clean.includes('bronch') || clean.includes('trachea') || clean.includes('respirat') || clean.includes('pleura')) {
+    return manifestList.find((m) => m.fma_id === 'FMA_7195') ?? manifestList[0];
   }
-
-  // Myocardial regions (Septum, Apex)
-  if (id === 'FMA_9462') {
-    // Septum: curved muscular plate
-    const geom = new THREE.BoxGeometry(0.18, 0.55, 0.35);
-    return geom;
+  if (clean.includes('liver') || clean.includes('hepat')) {
+    return manifestList.find((m) => m.fma_id === 'FMA_7197') ?? manifestList[0];
   }
-
-  if (id === 'FMA_7163') {
-    // Apex: conical cardiac tip
-    const geom = new THREE.ConeGeometry(0.25, 0.45, 16);
-    geom.rotateX(Math.PI);
-    return geom;
+  if (clean.includes('kidney') || clean.includes('renal')) {
+    return manifestList.find((m) => m.fma_id === 'FMA_7203') ?? manifestList[0];
   }
-
-  // Lungs
-  if (id === 'FMA_7309' || id === 'FMA_7310') {
-    const geom = new THREE.SphereGeometry(r * 0.85, 24, 24);
-    geom.scale(0.7, 1.3, 0.9);
-    return geom;
-  }
-
-  // Trachea
-  if (id === 'FMA_7394') {
-    return new THREE.CylinderGeometry(0.12, 0.12, 1.0, 16);
-  }
-
-  // Sternum
-  if (id === 'FMA_7485') {
-    const geom = new THREE.BoxGeometry(0.35, 1.7, 0.08);
-    return geom;
-  }
-
-  // Ribcage: thoracic cage arches
-  if (id === 'FMA_7480') {
-    const geom = new THREE.TorusGeometry(r * 0.75, 0.05, 8, 32, Math.PI * 1.5);
-    geom.rotateX(Math.PI / 2);
-    return geom;
-  }
-
-  // Thoracic Spine
-  if (id === 'FMA_9139') {
-    return new THREE.CylinderGeometry(0.16, 0.16, 2.8, 12);
-  }
-
-  // Generic fallback: organic ellipsoid
-  const geom = new THREE.SphereGeometry(Math.max(r * 0.75, 0.2), 20, 20);
-  if (sys === 'cardiovascular') geom.scale(1.0, 1.1, 0.9);
-  return geom;
+  return manifestList.find((m) => m.fma_id === 'FMA_7480') ?? manifestList[0];
 }
 
-// Get realistic default anatomical material color
-function getDefaultOrganColor(meta: AnatomicalStructureMeta): string {
-  const id = meta.fma_id;
-  const sys = meta.organ_system;
+export const ModelLoader: React.FC = () => {
+  const groupRef = useRef<THREE.Group>(null);
+  const gltf = useGLTF('/models/human_anatomy.glb');
 
-  if (id === 'FMA_7088' || id === 'FMA_7099' || id === 'FMA_9462' || id === 'FMA_7163') {
-    return '#991b1b'; // Deep myocardial crimson
-  }
-  if (id === 'FMA_7098') {
-    return '#831843'; // Right ventricle darker venous muscle
-  }
-  if (id === 'FMA_7096' || id === 'FMA_4720' || id === 'FMA_4721') {
-    return '#3b82f6'; // Systemic venous blue
-  }
-  if (id === 'FMA_7097') {
-    return '#dc2626'; // Left atrium oxygenated red
-  }
-  if (id === 'FMA_7101' || id === 'FMA_7100' || id === 'FMA_7105' || id === 'FMA_3734' || id === 'FMA_3735') {
-    return '#ef4444'; // Arterial scarlet red
-  }
-  if (id.includes('7234') || id.includes('7236') || id.includes('7237') || id.includes('7238')) {
-    return '#f8fafc'; // Valvular collagen white
-  }
-  if (id === 'FMA_8614') {
-    return '#0284c7'; // Pulmonary trunk
-  }
-  if (sys === 'respiratory') {
-    return '#f472b6'; // Lung parenchyma pink
-  }
-  if (sys === 'skeletal') {
-    return '#e2e8f0'; // Bone ivory
-  }
-  return '#cbd5e1';
-}
-
-interface AnatomicalNodeProps {
-  meta: AnatomicalStructureMeta;
-}
-
-const AnatomicalNode: React.FC<AnatomicalNodeProps> = ({ meta }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
   const {
-    registerMesh,
-    unregisterMesh,
+    registerGlbScene,
+    meshRegistry,
     selectedFmaId,
     hoveredFmaId,
+    highlightedIds,
+    ghostedIds,
+    pulsingIds,
+    tissueStates,
+    visibleSystems,
+    cameraFocusIds,
     selectStructure,
     setHoveredStructure,
-    isolatedFmaIds,
-    highlightedFmaIds,
-    tissueStates
   } = useSceneStore();
 
-  const isSelected = selectedFmaId === meta.fma_id;
-  const isHovered = hoveredFmaId === meta.fma_id;
-  const isIsolatedTarget = isolatedFmaIds.length === 0 || isolatedFmaIds.includes(meta.fma_id);
-  const highlightColor = highlightedFmaIds[meta.fma_id];
-  const tissueState = tissueStates[meta.fma_id] || 'normal';
+  const clonedScene = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
 
-  // Geometry
-  const geometry = useMemo(() => createOrganGeometry(meta), [meta]);
-
-  // Color selection
-  const baseColor = useMemo(() => {
-    if (tissueState === 'ischemic') return '#4c1d95'; // Hypoxic violaceous cyanosis
-    if (tissueState === 'necrotic') return '#27272a'; // Mottled dark necrotic infarcted
-    if (tissueState === 'inflamed') return '#ff2222'; // Hyperemic erythematous glow
-    return getDefaultOrganColor(meta);
-  }, [meta, tissueState]);
-
-  // Register mesh
   useEffect(() => {
-    if (meshRef.current) {
-      meshRef.current.userData = { fma_id: meta.fma_id, meta };
-      registerMesh(meta.fma_id, meshRef.current);
-    }
-    return () => {
-      unregisterMesh(meta.fma_id);
-    };
-  }, [meta, registerMesh, unregisterMesh]);
+    let cancelled = false;
 
-  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    async function initializeAnatomyScene() {
+      try {
+        const resp = await fetch('/models/manifest.json');
+        const manifestData = await resp.json();
+        const structuresList: AnatomicalStructureMeta[] = Array.isArray(manifestData.structures)
+          ? manifestData.structures
+          : Object.values(manifestData.structures ?? {});
+
+        // 1. Center and normalize full human body height to 3.4 world units
+        const rawBox = new THREE.Box3().setFromObject(clonedScene);
+        const rawSize = new THREE.Vector3();
+        const rawCenter = new THREE.Vector3();
+        rawBox.getSize(rawSize);
+        rawBox.getCenter(rawCenter);
+
+        const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z, 0.001);
+        const targetScale = 3.4 / maxDim;
+        clonedScene.scale.setScalar(targetScale);
+        clonedScene.position.set(
+          -rawCenter.x * targetScale,
+          -rawCenter.y * targetScale,
+          -rawCenter.z * targetScale
+        );
+        clonedScene.updateMatrixWorld(true);
+
+        const normalizedBodyBox = new THREE.Box3().setFromObject(clonedScene);
+        const minY = normalizedBodyBox.min.y;
+        const totalHeight = Math.max(normalizedBodyBox.max.y - minY, 0.001);
+
+        const entriesMap: Record<string, RegisteredMeshEntry> = {};
+        const metaMap: Record<string, AnatomicalStructureMeta> = {};
+        for (const s of structuresList) {
+          metaMap[s.fma_id] = s;
+        }
+
+        clonedScene.traverse((child) => {
+          if (!(child as THREE.Mesh).isMesh) return;
+          const mesh = child as THREE.Mesh;
+          const lineageName = `${mesh.parent?.name ?? ''}_${mesh.name}`;
+
+          // Hide outer skin shell by default so skeleton and internal organs are clearly visible
+          if (/skin|body_surface|outer_surface/i.test(lineageName)) {
+            mesh.userData.isSkinShell = true;
+            mesh.visible = false;
+            return;
+          }
+
+          const meshBox = new THREE.Box3().setFromObject(mesh);
+          const meshCenter = new THREE.Vector3();
+          meshBox.getCenter(meshCenter);
+          const relativeHeight = (meshCenter.y - minY) / totalHeight;
+
+          const matchedMeta = classifyNodeToFma(lineageName, relativeHeight, structuresList);
+          const fmaId = matchedMeta.fma_id;
+          mesh.userData.fmaId = fmaId;
+          mesh.userData.organSystem = matchedMeta.organ_system;
+
+          const palette = SYSTEM_PALETTE[matchedMeta.organ_system] ?? SYSTEM_PALETTE.skeletal;
+          mesh.material = new THREE.MeshPhysicalMaterial({
+            color: new THREE.Color(palette.color),
+            roughness: palette.roughness,
+            metalness: palette.metalness,
+            clearcoat: matchedMeta.organ_system === 'cardiovascular' ? 0.35 : 0.1,
+            transparent: true,
+            opacity: 1.0,
+          });
+          mesh.userData.baseColor = palette.color;
+
+          if (!entriesMap[fmaId]) {
+            entriesMap[fmaId] = {
+              fma_id: fmaId,
+              name: matchedMeta.common_name || matchedMeta.canonical_name || fmaId,
+              organ_system: matchedMeta.organ_system,
+              meshes: [],
+              boundingBox: new THREE.Box3(),
+              center: new THREE.Vector3(),
+              radius: 0.2,
+            };
+          }
+          entriesMap[fmaId].meshes.push(mesh);
+          entriesMap[fmaId].boundingBox.union(meshBox);
+        });
+
+        // Compute final bounding spheres for each anatomical structure
+        for (const entry of Object.values(entriesMap)) {
+          const sphere = new THREE.Sphere();
+          entry.boundingBox.getBoundingSphere(sphere);
+          entry.center.copy(sphere.center);
+          entry.radius = Math.max(sphere.radius, 0.12);
+        }
+
+        if (!cancelled) {
+          registerGlbScene(entriesMap, metaMap);
+        }
+      } catch (err) {
+        console.error('[ModelLoader] Initialization error:', err);
+      }
+    }
+
+    initializeAnatomyScene();
+    return () => {
+      cancelled = true;
+    };
+  }, [clonedScene, registerGlbScene]);
+
+  // Real-time 60 FPS Shader, Opacity, Occlusion & Systolic Heartbeat Loop
+  useFrame(({ clock, camera }) => {
+    const t = clock.getElapsedTime();
+
+    // Determine dynamic line-of-sight bone/organ occluders between camera and focused organ
+    const dynamicOccluders = checkRayCylinderOcclusion(
+      camera.position,
+      cameraFocusIds,
+      meshRegistry
+    );
+
+    for (const [fmaId, entry] of Object.entries(meshRegistry)) {
+      const systemVisible = visibleSystems[entry.organ_system] ?? true;
+      const isSelected = selectedFmaId === fmaId;
+      const isHovered = hoveredFmaId === fmaId;
+      const isHighlighted = highlightedIds.includes(fmaId) || isSelected;
+      const isPulsing = pulsingIds.includes(fmaId);
+      const isGhosted = ghostedIds.includes(fmaId) || dynamicOccluders.has(fmaId);
+      const tissueState = tissueStates[fmaId] ?? 'normal';
+
+      // Systolic heartbeat contraction scale (72 BPM = 1.2 Hz)
+      const pulseWave = isPulsing ? Math.pow(Math.sin(t * Math.PI * 2.4), 4) : 0;
+
+      for (const mesh of entry.meshes) {
+        mesh.visible = systemVisible;
+        if (!systemVisible) continue;
+
+        const mat = mesh.material as THREE.MeshPhysicalMaterial;
+        const baseColor = new THREE.Color(mesh.userData.baseColor ?? '#e8dfd1');
+
+        // Apply tissue state / highlight emissive colors
+        if (tissueState === 'ischemic') {
+          mat.color.lerp(new THREE.Color('#4c1d95'), 0.18);
+          mat.emissive.set('#6d28d9');
+          mat.emissiveIntensity = 0.35 + 0.2 * Math.sin(t * 4.0);
+        } else if (tissueState === 'necrotic') {
+          mat.color.lerp(new THREE.Color('#1e1b4b'), 0.2);
+          mat.emissive.set('#312e81');
+          mat.emissiveIntensity = 0.25;
+        } else if (isHighlighted || isPulsing) {
+          mat.color.copy(baseColor);
+          mat.emissive.set(isPulsing ? '#ef4444' : '#14b8a6');
+          mat.emissiveIntensity = isPulsing ? 0.25 + pulseWave * 0.65 : 0.45;
+        } else if (isHovered) {
+          mat.color.copy(baseColor);
+          mat.emissive.set('#38bdf8');
+          mat.emissiveIntensity = 0.28;
+        } else {
+          mat.color.copy(baseColor);
+          mat.emissive.set('#000000');
+          mat.emissiveIntensity = 0;
+        }
+
+        // Smoothly interpolate opacity for ghosted occluders (Sternum, Rib Cage, Skull)
+        const targetOpacity = isGhosted && !isHighlighted ? 0.12 : 1.0;
+        mat.opacity = THREE.MathUtils.lerp(mat.opacity, targetOpacity, 0.12);
+        mat.depthWrite = mat.opacity > 0.45;
+      }
+    }
+  });
+
+  const handlePointerClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
-    selectStructure(meta.fma_id);
+    const fmaId = e.object.userData?.fmaId;
+    if (fmaId) {
+      selectStructure(fmaId);
+    }
   };
 
   const handlePointerOver = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
-    setHoveredStructure(meta.fma_id);
+    const fmaId = e.object.userData?.fmaId;
+    if (fmaId) {
+      document.body.style.cursor = 'pointer';
+      setHoveredStructure(fmaId);
+    }
   };
 
   const handlePointerOut = () => {
+    document.body.style.cursor = 'default';
     setHoveredStructure(null);
   };
 
-  // Skeletal structures (sternum/ribcage) have subtle transparency to act as natural occluders
-  const isSkeletal = meta.organ_system === 'skeletal';
-  const isLung = meta.organ_system === 'respiratory';
-
-  let opacity = 1.0;
-  let transparent = false;
-
-  if (!isIsolatedTarget) {
-    opacity = 0.06;
-    transparent = true;
-  } else if (isSkeletal) {
-    opacity = 0.45;
-    transparent = true;
-  } else if (isLung) {
-    opacity = 0.55;
-    transparent = true;
-  }
-
-  // Emissive calculation
-  let emissive = '#000000';
-  let emissiveIntensity = 0.0;
-
-  if (highlightColor) {
-    emissive = highlightColor;
-    emissiveIntensity = 0.7;
-  } else if (isSelected) {
-    emissive = '#2dd4bf'; // Teal select glow
-    emissiveIntensity = 0.6;
-  } else if (isHovered) {
-    emissive = '#38bdf8'; // Cyan hover glow
-    emissiveIntensity = 0.4;
-  } else if (tissueState === 'inflamed') {
-    emissive = '#ef4444';
-    emissiveIntensity = 0.5;
-  }
-
-  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
-
-  useEffect(() => {
-    if (materialRef.current) {
-      const activeState = tissueState && tissueState !== 'vascular_occlusion'
-        ? tissueState
-        : (highlightColor ? 'highlighted' : 'normal');
-      applyTissueStateToMaterial(materialRef.current, {
-        state: activeState,
-        highlightColor: highlightColor || (isSelected ? '#2dd4bf' : (isHovered ? '#38bdf8' : undefined)),
-        severity: 0.9
-      });
-    }
-  }, [tissueState, highlightColor, isSelected, isHovered]);
-
   return (
-    <mesh
-      ref={meshRef}
-      position={meta.centroid}
-      geometry={geometry}
-      onClick={handleClick}
+    <group
+      ref={groupRef}
+      onClick={handlePointerClick}
       onPointerOver={handlePointerOver}
       onPointerOut={handlePointerOut}
-      castShadow
-      receiveShadow
     >
-      <meshStandardMaterial
-        ref={materialRef}
-        color={baseColor}
-        roughness={isSkeletal ? 0.35 : 0.45}
-        metalness={0.1}
-        opacity={opacity}
-        transparent={transparent}
-        depthWrite={!transparent}
-        emissive={emissive}
-        emissiveIntensity={emissiveIntensity}
-      />
-    </mesh>
-  );
-};
-
-export const ModelLoader: React.FC = () => {
-  const { manifest, setManifest } = useSceneStore();
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch('/models/manifest.json')
-      .then((res) => {
-        if (!res.ok) throw new Error('Could not load manifest.json');
-        return res.json();
-      })
-      .then((data: ManifestData) => {
-        setManifest(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('[ModelLoader] Manifest load error:', err);
-        setLoading(false);
-      });
-  }, [setManifest]);
-
-  if (loading || !manifest) {
-    return null;
-  }
-
-  return (
-    <group name="anatomical_rig_root">
-      {Object.values(manifest.structures).map((meta) => (
-        <AnatomicalNode key={meta.fma_id} meta={meta} />
-      ))}
+      <primitive object={clonedScene} />
     </group>
   );
 };
+
+useGLTF.preload('/models/human_anatomy.glb');

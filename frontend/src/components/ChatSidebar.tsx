@@ -115,6 +115,9 @@ export const ChatSidebar: React.FC = () => {
         onSceneCommand: (cmd) => {
           sceneController.executeCommand(cmd);
         },
+        onSceneChoreography: (steps) => {
+          sceneController.playChoreography(steps);
+        },
         onCitation: (citation) => {
           useChatStore.getState().setActiveCitations([
             ...useChatStore.getState().activeCitations,

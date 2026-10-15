@@ -313,10 +313,44 @@ ANATOMICAL_STRUCTURES = [
 ]
 
 
+STRUCTURE_ZONE_RANKS = {
+    "FMA_7394": 4,  # Trachea (Zone 04)
+    "FMA_7309": 4,  # Right Lung (Zone 04)
+    "FMA_7310": 4,  # Left Lung (Zone 04)
+    "FMA_7480": 4,  # Ribcage (Zone 04)
+    "FMA_7485": 4,  # Sternum (Zone 04)
+    "FMA_9139": 4,  # Thoracic Spine (Zone 04)
+    "FMA_3735": 5,  # Aortic Arch (Zone 05)
+    "FMA_3734": 5,  # Ascending Aorta (Zone 05)
+    "FMA_4720": 5,  # Superior Vena Cava (Zone 05)
+    "FMA_8614": 5,  # Pulmonary Trunk (Zone 05)
+    "FMA_7088": 5,  # Heart (Zone 05)
+    "FMA_7096": 5,  # Right Atrium (Zone 05)
+    "FMA_7097": 5,  # Left Atrium (Zone 05)
+    "FMA_7098": 5,  # Right Ventricle (Zone 05)
+    "FMA_7099": 5,  # Left Ventricle (Zone 05)
+    "FMA_7101": 5,  # LAD Artery (Zone 05)
+    "FMA_7100": 5,  # RCA Artery (Zone 05)
+    "FMA_7105": 5,  # LCX Artery (Zone 05)
+    "FMA_9462": 5,  # Interventricular Septum (Zone 05)
+    "FMA_7163": 5,  # Left Ventricular Apex (Zone 05)
+    "FMA_7234": 5,  # Tricuspid Valve (Zone 05)
+    "FMA_7236": 5,  # Mitral Valve (Zone 05)
+    "FMA_7237": 5,  # Pulmonary Valve (Zone 05)
+    "FMA_7238": 5,  # Aortic Valve (Zone 05)
+    "FMA_4721": 8,  # Inferior Vena Cava (Zone 08 - Abdominal Venous Drainage)
+}
+
+
 def build_manifest() -> dict:
     structures_map = {}
     for item in ANATOMICAL_STRUCTURES:
-        structures_map[item["fma_id"]] = item
+        fma_id = item["fma_id"]
+        h2t = STRUCTURE_ZONE_RANKS.get(fma_id, 5)
+        t2h = 13 - h2t
+        item["cranio_caudal_rank"] = h2t
+        item["caudo_cranial_rank"] = t2h
+        structures_map[fma_id] = item
 
     manifest = {
         "version": "1.0.0",
@@ -330,7 +364,7 @@ def build_manifest() -> dict:
 def main():
     manifest = build_manifest()
 
-    # Destination in frontend public models directory
+    # 1. Destination in frontend public models directory
     frontend_models_dir = Path(__file__).resolve().parent.parent.parent / "frontend" / "public" / "models"
     frontend_models_dir.mkdir(parents=True, exist_ok=True)
     manifest_file = frontend_models_dir / "manifest.json"
@@ -338,7 +372,15 @@ def main():
     with open(manifest_file, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
-    print(f"[build_anatomy_manifest] Successfully generated {manifest_file} with {len(manifest['structures'])} anatomical structures.")
+    # 2. Sync to backend/app/db/seed_data/structures.json
+    seed_dir = Path(__file__).resolve().parent.parent / "app" / "db" / "seed_data"
+    seed_dir.mkdir(parents=True, exist_ok=True)
+    seed_file = seed_dir / "structures.json"
+
+    with open(seed_file, "w", encoding="utf-8") as f:
+        json.dump(manifest["structures"], f, indent=2)
+
+    print(f"[build_anatomy_manifest] Successfully generated {manifest_file} and {seed_file} with {len(manifest['structures'])} anatomical structures (ranks 1-12 attached).")
 
 
 if __name__ == "__main__":

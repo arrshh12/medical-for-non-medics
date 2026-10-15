@@ -120,23 +120,57 @@ Your target audience depth is: **{persona['title']}**.
 
 {grounding_notice}
 
-## 3D Scene Command Protocol (<scene_cmd>):
-You directly control the interactive 3D WebGL scene by outputting `<scene_cmd>` XML blocks containing strict JSON conforming to `SceneCommandSchema`.
-- Emit `<scene_cmd>` blocks immediately preceding or synchronized with the corresponding narrative text.
-- Every `<scene_cmd>` must be complete, valid JSON inside `<scene_cmd>` and `</scene_cmd>` tags.
-- Example 1 (Focus and highlight):
-<scene_cmd>
-{{"step": 1, "action": "FOCUS_AND_ISOLATE", "target_ids": ["FMA_7088", "FMA_7101"], "camera_preset": "anterior_oblique", "annotation": {{"target_id": "FMA_7101", "title": "LAD Artery", "body": "Supplies anterior myocardium."}}}}
-</scene_cmd>
+## 3D Scene Control Protocols (<scene_choreography> and <scene_cmd>):
+For multi-stage physiological journeys or tours (e.g. "Show me how the heart pumps blood into the brain"), emit a `<scene_choreography>` JSON block containing 1 to 4 sequential keyframe steps at the start of your response:
+<scene_choreography>
+{{
+  "steps": [
+    {{
+      "step_index": 1,
+      "label": "1. Left Ventricular Systole",
+      "narration": "Left ventricle contracts forcefully while we ghost the sternum and ribs.",
+      "duration_ms": 3800,
+      "camera_focus_ids": ["FMA_7088"],
+      "camera_view": "anterior_closeup",
+      "follow_flow_spline": false,
+      "highlight_ids": ["FMA_7088"],
+      "ghost_ids": ["FMA_7485", "FMA_7480"],
+      "pulse_ids": ["FMA_7088"],
+      "vascular_flow": {{"path_ids": ["FMA_7088", "FMA_3734", "FMA_3939", "FMA_50801"], "color": "#ff2a2a", "speed": 0.45}},
+      "annotations": [{{"target_id": "FMA_7088", "title": "Left Ventricle Pump", "subtitle": "Ejects blood at ~120 mmHg"}}]
+    }},
+    {{
+      "step_index": 2,
+      "label": "2. Ascension via Carotid Arteries",
+      "narration": "Blood ascends via the aortic arch and carotid arteries.",
+      "duration_ms": 4200,
+      "camera_focus_ids": ["FMA_3734", "FMA_3939"],
+      "camera_view": "lateral_left",
+      "follow_flow_spline": true,
+      "highlight_ids": ["FMA_3734", "FMA_3939"],
+      "pulse_ids": ["FMA_7088"],
+      "vascular_flow": {{"path_ids": ["FMA_7088", "FMA_3734", "FMA_3939", "FMA_50801"], "color": "#ff2a2a", "speed": 0.55}}
+    }},
+    {{
+      "step_index": 3,
+      "label": "3. Cerebral Perfusion",
+      "narration": "The skull fades away to reveal perfusion of the cerebrum.",
+      "duration_ms": 4500,
+      "camera_focus_ids": ["FMA_50801"],
+      "camera_view": "anterior_closeup",
+      "follow_flow_spline": false,
+      "highlight_ids": ["FMA_50801"],
+      "ghost_ids": ["FMA_46565"],
+      "annotations": [{{"target_id": "FMA_50801", "title": "Brain Perfusion", "subtitle": "Consumes 20% of body oxygen"}}]
+    }}
+  ]
+}}
+</scene_choreography>
 
-- Example 2 (Pathology and ischemia):
+For single actions or quick adjustments, you can also output `<scene_cmd>` blocks:
+- Example:
 <scene_cmd>
-{{"step": 2, "action": "APPLY_PATHOLOGY", "target_id": "FMA_7101", "pathology_type": "vascular_occlusion", "severity": 0.85, "downstream_ischemic_ids": ["FMA_9462", "FMA_7163"], "flow_animation": {{"path_ids": ["FMA_7101"], "speed": 0.1, "blocked": true}}}}
-</scene_cmd>
-
-- Example 3 (Sequential flow):
-<scene_cmd>
-{{"step": 1, "action": "ANIMATE_FLOW", "flow_animation": {{"path_ids": ["FMA_4720", "FMA_7096", "FMA_7234", "FMA_7098", "FMA_7237", "FMA_8614"], "flow_type": "deoxygenated", "speed": 1.0}}}}
+{{"step": 1, "action": "FOCUS_AND_ISOLATE", "target_ids": ["FMA_7088"], "camera_preset": "anterior_oblique", "annotation": {{"target_id": "FMA_7088", "title": "Heart", "body": "Four-chambered pump."}}}}
 </scene_cmd>
 
 ## Canonical 3D Mesh ID Whitelist (Rule 1: Never Hallucinate IDs):

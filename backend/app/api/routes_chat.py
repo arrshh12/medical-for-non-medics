@@ -61,7 +61,7 @@ async def chat_stream(req: ChatStreamRequest):
     # 5. Generator for Server-Sent Events
     async def sse_event_stream() -> AsyncGenerator[str, None]:
         # A. Emit grounding status frame
-        yield f"event: grounding_status\ndata: {json.dumps({'status': rag_context['grounding_status'], 'max_similarity': rag_context['max_similarity']})}\n\n"
+        yield f"event: grounding_status\ndata: {json.dumps({'status': rag_context['grounding_status'], 'max_similarity': rag_context['max_similarity'], 'routing_path': rag_context.get('routing_path', 'Path A (Tier 1 Graph)')})}\n\n"
 
         # B. Emit citation frames for verified retrieved chunks
         for chunk in rag_context["retrieved_chunks"]:

@@ -1,7 +1,8 @@
 """
 Streaming Dual-Output Parser for HoloMed 3D.
 Processes token streams from OpenAI-compatible providers, interleaving real-time
-narrative text deltas and validated 3D WebGL scene commands (<scene_cmd>...</scene_cmd>).
+narrative text deltas, validated 3D WebGL scene commands (<scene_cmd>...</scene_cmd>),
+and synchronized multi-step AI choreography timelines (<scene_choreography>...</scene_choreography>).
 Enforces Rule 4 citation grounding (stripping/verifying [source_id] tags) and
 resilient JSON recovery with Pydantic v2 validation.
 """
@@ -9,7 +10,7 @@ resilient JSON recovery with Pydantic v2 validation.
 import json
 import logging
 import re
-from typing import Any, AsyncIterator, Dict, List, Optional, Set, Union
+from typing import Any, AsyncIterator, Dict, List, Optional, Set, Tuple, Union
 
 from backend.app.schemas.chat_schemas import CitationItem
 from backend.app.schemas.scene_command_schemas import SceneCommandSchema
@@ -19,14 +20,51 @@ logger = logging.getLogger(__name__)
 # State constants
 STATE_TEXT = "TEXT"
 STATE_COMMAND = "COMMAND"
+STATE_CHOREOGRAPHY = "CHOREOGRAPHY"
 
 # Regex for tag boundaries
-RE_OPEN_TAG = re.compile(r'<\s*scene_cmd\s*>', re.IGNORECASE)
-RE_CLOSE_TAG = re.compile(r'<\s*/\s*scene_cmd\s*>', re.IGNORECASE)
+RE_OPEN_CMD = re.compile(r'<\s*scene_cmd\s*>', re.IGNORECASE)
+RE_CLOSE_CMD = re.compile(r'<\s*/\s*scene_cmd\s*>', re.IGNORECASE)
+
+RE_OPEN_CHOREO = re.compile(r'<\s*scene_choreography\s*>', re.IGNORECASE)
+RE_CLOSE_CHOREO = re.compile(r'<\s*/\s*scene_choreography\s*>', re.IGNORECASE)
 
 # Regex to detect bracketed citation patterns: [NBK459269], [PMID12345], [source_id]
-# Capture group 1: citation tag content, Capture group 2: following character (e.g. '(' for markdown links)
 RE_CITATION = re.compile(r'\[([A-Za-z0-9_\-\s:]+)\](\(?)')
+
+CHOREOGRAPHY_SYSTEM_PROMPT = """You are HoloMed 3D, an interactive 3D Human Anatomy & Pathology AI Tutor.
+You simultaneously explain medical concepts in clear language AND control a live 3D human skeleton and organ viewport in real time.
+
+AVAILABLE 3D ANATOMICAL STRUCTURES (FMA IDs):
+- FMA_7088: Heart (Left/Right Ventricles, Myocardium)
+- FMA_3734: Aorta & Aortic Arch
+- FMA_3939: Common & Internal Carotid Arteries (Neck)
+- FMA_50801: Brain (Cerebrum, Circle of Willis)
+- FMA_46565: Skull & Cranium
+- FMA_7485: Sternum (Breastbone)
+- FMA_7480: Rib Cage & Thoracic Skeleton
+- FMA_7195: Lungs (Right & Left)
+- FMA_7197: Liver
+- FMA_7203: Kidneys
+
+MANDATORY DUAL-OUTPUT FORMAT:
+For complex multi-step processes or anatomical journeys (such as "Show me how the heart pumps blood into the brain"), at the very beginning of your response, emit a `<scene_choreography>` JSON block containing 1 to 4 sequential 3D camera & animation steps that visually demonstrate what you are about to explain, followed by `</scene_choreography>`.
+"""
+
+
+def extract_choreography_and_clean_text(full_buffer: str) -> tuple[dict[str, Any] | None, str]:
+    """Helper function to extract choreography JSON block from a static string buffer."""
+    pattern = re.compile(r"<scene_choreography>\s*(\{.*?\})\s*</scene_choreography>", re.DOTALL)
+    match = pattern.search(full_buffer)
+    choreography = None
+    if match:
+        try:
+            choreography = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            choreography = None
+    clean_text = pattern.sub("", full_buffer)
+    clean_text = re.sub(r"<scene_choreography>.*$", "", clean_text, flags=re.DOTALL)
+    return choreography, clean_text.lstrip()
 
 
 def repair_json_payload(raw_text: str) -> str:
@@ -51,24 +89,28 @@ def repair_json_payload(raw_text: str) -> str:
 
 def is_potential_tag_prefix(text: str, is_closing: bool = False) -> bool:
     """
-    Checks if the given string could be the starting prefix of a <scene_cmd> or </scene_cmd> tag.
+    Checks if the given string could be the starting prefix of a scene tag.
     Used to hold back potential tag boundary characters during streaming.
     """
     if not text or not text.startswith('<'):
         return False
 
     norm = text.lower().replace(' ', '')
-    target = "</scene_cmd>" if is_closing else "<scene_cmd>"
+    targets = (
+        ["</scene_cmd>", "</scene_choreography>"]
+        if is_closing
+        else ["<scene_cmd>", "<scene_choreography>"]
+    )
 
-    # Check if target starts with normalized prefix
-    return target.startswith(norm)
+    return any(target.startswith(norm) for target in targets)
 
 
 class DualOutputParser:
     """
     State machine parser consuming token deltas from an AsyncOpenAI completion stream.
     Multiplexes output into typed Server-Sent Events (SSE):
-    - 'scene_command': Validated 3D scene action (SceneCommandSchema)
+    - 'scene_choreography': Multi-step timeline keyframes
+    - 'scene_command': Single validated 3D scene action (SceneCommandSchema)
     - 'text_delta': Natural language explanation for user chat UI
     - 'citation': Literature citation card metadata
     """
@@ -80,6 +122,7 @@ class DualOutputParser:
         self.mode: str = STATE_TEXT
         self.text_buffer: str = ""
         self.command_buffer: str = ""
+        self.choreography_buffer: str = ""
 
         # Map of verified source IDs for Rule 4 citation gating
         self.verified_sources: Dict[str, CitationItem] = {}
@@ -104,69 +147,43 @@ class DualOutputParser:
                         source_id=chunk.get("source_id", "Unknown"),
                         source_type=chunk.get("source_type", "StatPearls"),
                         title=chunk.get("title", ""),
-                        section=chunk.get("section", chunk.get("section_heading", "")),
-                        excerpt=chunk.get("excerpt", chunk.get("content", ""))[:400],
+                        section=chunk.get("section_heading", chunk.get("section", "")),
+                        excerpt=chunk.get("content", chunk.get("excerpt", ""))[:300],
                         citation_url=chunk.get("citation_url", "https://www.ncbi.nlm.nih.gov/")
                     )
-                except Exception as exc:
-                    logger.warning(f"[DualOutputParser] Failed to construct CitationItem: {exc}")
+                except Exception as e:
+                    logger.warning(f"[DualOutputParser] Failed to construct CitationItem: {e}")
                     continue
             else:
                 continue
 
-            sid = item.source_id.strip()
-            self.verified_sources[sid.upper()] = item
-            self.verified_sources[sid.lower()] = item
-            self.verified_sources[sid] = item
+            raw_id = item.source_id.strip()
+            self.verified_sources[raw_id] = item
+            self.verified_sources[raw_id.upper()] = item
 
-            # Strip common prefixes (e.g. 'NBK' or 'PMID') for numeric match
-            num_match = re.search(r'\d+', sid)
-            if num_match:
-                self.verified_sources[num_match.group(0)] = item
+            # Strip prefixes like STATPEARLS:, NBK, PMID
+            clean_num = re.sub(r'^(STATPEARLS|PUBMED|PMID|NBK)[\s:]+', '', raw_id, flags=re.IGNORECASE)
+            self.verified_sources[clean_num] = item
+            self.verified_sources[clean_num.upper()] = item
 
-    def _parse_scene_command(self, raw_json: str) -> Optional[Dict[str, Any]]:
+    def _parse_scene_command(self, raw_json_str: str) -> Optional[Dict[str, Any]]:
         """
-        Parses, repairs, and validates a JSON string against SceneCommandSchema.
-        Emits a structured 'scene_command' event dictionary or logs non-fatal error.
+        Repairs, parses, and validates JSON against SceneCommandSchema.
         """
-        repaired = repair_json_payload(raw_json)
+        repaired = repair_json_payload(raw_json_str)
         if not repaired:
             return None
 
-        data: Optional[Dict[str, Any]] = None
-
-        # Pass 1: Direct JSON parsing
         try:
             data = json.loads(repaired)
-        except Exception:
-            pass
-
-        # Pass 2: Fallback regex repair for single quotes or missing outer braces
-        if data is None:
-            try:
-                # Replace single quotes with double quotes for valid JSON
-                repaired_quotes = re.sub(r"'([^'\\]*(?:\\.[^'\\]*)*)'", r'"\1"', repaired)
-                data = json.loads(repaired_quotes)
-            except Exception:
-                pass
-
-        # Pass 3: Extract first outer brace pair
-        if data is None:
-            first_brace = repaired.find('{')
-            last_brace = repaired.rfind('}')
-            if first_brace != -1 and last_brace > first_brace:
-                try:
-                    trimmed = repaired[first_brace:last_brace + 1]
-                    trimmed = re.sub(r',\s*([}\]])', r'\1', trimmed)
-                    data = json.loads(trimmed)
-                except Exception:
-                    pass
-
-        if data is None or not isinstance(data, dict):
-            logger.warning(f"[DualOutputParser] Failed to parse scene command JSON: {raw_json[:150]}")
+        except json.JSONDecodeError as exc:
+            logger.warning(f"[DualOutputParser] JSONDecodeError parsing scene_cmd: {exc} | Raw: {raw_json_str[:120]}")
             return None
 
-        # Action normalization (e.g. 'focus_structure' -> 'FOCUS_STRUCTURE')
+        if not isinstance(data, dict):
+            return None
+
+        # Normalize action field
         if "action" in data and isinstance(data["action"], str):
             data["action"] = data["action"].strip().upper()
 
@@ -179,6 +196,24 @@ class DualOutputParser:
             }
         except Exception as err:
             logger.warning(f"[DualOutputParser] SceneCommandSchema validation failed: {err} | Raw: {data}")
+            return None
+
+    def _parse_choreography(self, raw_json_str: str) -> Optional[Dict[str, Any]]:
+        """
+        Repairs and parses a multi-step <scene_choreography> JSON block.
+        """
+        repaired = repair_json_payload(raw_json_str)
+        if not repaired:
+            return None
+
+        try:
+            data = json.loads(repaired)
+            return {
+                "event": "scene_choreography",
+                "data": data
+            }
+        except Exception as exc:
+            logger.warning(f"[DualOutputParser] Failed to parse scene_choreography: {exc} | Raw: {raw_json_str[:120]}")
             return None
 
     def _process_text_and_verify_citations(
@@ -258,11 +293,29 @@ class DualOutputParser:
                 self.text_buffer += chunk
                 chunk = ""
 
-                # Look for opening <scene_cmd> tag
-                open_match = RE_OPEN_TAG.search(self.text_buffer)
-                if open_match:
-                    # Everything prior to <scene_cmd> is narrative text
-                    pre_text = self.text_buffer[:open_match.start()]
+                # Look for opening tags: choreography or single command
+                open_choreo = RE_OPEN_CHOREO.search(self.text_buffer)
+                open_cmd = RE_OPEN_CMD.search(self.text_buffer)
+
+                # Prioritize whichever tag appears first
+                earliest_match = None
+                is_choreo = False
+                if open_choreo and open_cmd:
+                    if open_choreo.start() < open_cmd.start():
+                        earliest_match = open_choreo
+                        is_choreo = True
+                    else:
+                        earliest_match = open_cmd
+                        is_choreo = False
+                elif open_choreo:
+                    earliest_match = open_choreo
+                    is_choreo = True
+                elif open_cmd:
+                    earliest_match = open_cmd
+                    is_choreo = False
+
+                if earliest_match:
+                    pre_text = self.text_buffer[:earliest_match.start()]
                     if pre_text:
                         clean_text, cit_events = self._process_text_and_verify_citations(pre_text)
                         for ce in cit_events:
@@ -273,19 +326,21 @@ class DualOutputParser:
                                 "data": {"delta": clean_text}
                             })
 
-                    # Switch to command mode
-                    remaining = self.text_buffer[open_match.end():]
+                    remaining = self.text_buffer[earliest_match.end():]
                     self.text_buffer = ""
-                    self.command_buffer = remaining
-                    self.mode = STATE_COMMAND
+                    if is_choreo:
+                        self.choreography_buffer = remaining
+                        self.mode = STATE_CHOREOGRAPHY
+                    else:
+                        self.command_buffer = remaining
+                        self.mode = STATE_COMMAND
                     continue
                 else:
-                    # Check if buffer ends with a potential opening tag prefix (e.g. '<scen')
+                    # Check if buffer ends with a potential opening tag prefix (e.g. '<scene_')
                     last_lt = self.text_buffer.rfind('<')
-                    if last_lt != -1 and (len(self.text_buffer) - last_lt) <= 15:
+                    if last_lt != -1 and (len(self.text_buffer) - last_lt) <= 22:
                         candidate = self.text_buffer[last_lt:]
                         if is_potential_tag_prefix(candidate, is_closing=False):
-                            # Hold back candidate tag prefix
                             to_emit = self.text_buffer[:last_lt]
                             if to_emit:
                                 clean_text, cit_events = self._process_text_and_verify_citations(to_emit)
@@ -334,7 +389,7 @@ class DualOutputParser:
                 chunk = ""
 
                 # Look for closing </scene_cmd> tag
-                close_match = RE_CLOSE_TAG.search(self.command_buffer)
+                close_match = RE_CLOSE_CMD.search(self.command_buffer)
                 if close_match:
                     raw_cmd = self.command_buffer[:close_match.start()]
                     remaining = self.command_buffer[close_match.end():]
@@ -342,15 +397,31 @@ class DualOutputParser:
                     self.mode = STATE_TEXT
                     self.text_buffer = remaining
 
-                    # Parse and emit scene command
                     cmd_event = self._parse_scene_command(raw_cmd)
                     if cmd_event:
                         events.append(cmd_event)
-
-                    # Continue loop to process remaining text
                     continue
                 else:
-                    # Closing tag not yet reached, continue buffering
+                    break
+
+            elif self.mode == STATE_CHOREOGRAPHY:
+                self.choreography_buffer += chunk
+                chunk = ""
+
+                # Look for closing </scene_choreography> tag
+                close_match = RE_CLOSE_CHOREO.search(self.choreography_buffer)
+                if close_match:
+                    raw_choreo = self.choreography_buffer[:close_match.start()]
+                    remaining = self.choreography_buffer[close_match.end():]
+                    self.choreography_buffer = ""
+                    self.mode = STATE_TEXT
+                    self.text_buffer = remaining
+
+                    choreo_event = self._parse_choreography(raw_choreo)
+                    if choreo_event:
+                        events.append(choreo_event)
+                    continue
+                else:
                     break
 
         return events
@@ -358,7 +429,7 @@ class DualOutputParser:
     def flush(self) -> List[Dict[str, Any]]:
         """
         Flushes remaining buffered tokens at stream completion.
-        Ensures trailing commands or narrative text are not dropped.
+        Ensures trailing commands, choreography, or narrative text are not dropped.
         """
         events: List[Dict[str, Any]] = []
 
@@ -367,6 +438,13 @@ class DualOutputParser:
             if cmd_event:
                 events.append(cmd_event)
             self.command_buffer = ""
+            self.mode = STATE_TEXT
+
+        if self.mode == STATE_CHOREOGRAPHY and self.choreography_buffer.strip():
+            choreo_event = self._parse_choreography(self.choreography_buffer)
+            if choreo_event:
+                events.append(choreo_event)
+            self.choreography_buffer = ""
             self.mode = STATE_TEXT
 
         if self.text_buffer:
@@ -392,7 +470,6 @@ class DualOutputParser:
         Supports both string tokens and AsyncOpenAI ChatCompletionChunk objects.
         """
         async for chunk in token_stream:
-            # Extract text token depending on chunk type
             token = ""
             if isinstance(chunk, str):
                 token = chunk
@@ -409,7 +486,6 @@ class DualOutputParser:
             for event in events:
                 yield event
 
-        # Emit remaining buffered content
         for event in self.flush():
             yield event
 
@@ -418,8 +494,8 @@ class DualOutputParser:
         """
         Helper method to format an event dictionary as a standard SSE wire frame.
         Example:
-            event: text_delta
-            data: {"delta": "Hello"}
+            event: scene_choreography
+            data: {"steps": [...]}
         """
         event_type = event_payload.get("event", "message")
         data = event_payload.get("data", {})

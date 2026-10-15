@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 from backend.app.schemas.chat_schemas import CitationItem, ActiveMode
 from backend.app.db.local_store import local_store
 from backend.app.db.supabase_client import get_supabase_client
+from backend.app.services.adaptive_gatekeeper import adaptive_gatekeeper, RouteDecision
+from backend.app.services.ncbi_cloud_rag import ncbi_cloud_rag
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +74,22 @@ SYNONYM_MAP: Dict[str, Union[str, List[str]]] = {
     "superior vena cava": "FMA_4720",
     "ivc": "FMA_4721",
     "inferior vena cava": "FMA_4721",
-    "pericardium": "FMA_9869",
     "sternum": "FMA_7485",
-    "ribs": "FMA_7486",
-    "rib cage": "FMA_7486",
+    "ribs": "FMA_7480",
+    "rib cage": "FMA_7480",
+    "brain": "FMA_50801",
+    "cerebrum": "FMA_50801",
+    "cerebral": "FMA_50801",
+    "skull": "FMA_46565",
+    "cranium": "FMA_46565",
+    "carotid": "FMA_3939",
+    "carotid artery": "FMA_3939",
+    "carotids": "FMA_3939",
+    "liver": "FMA_7197",
+    "hepatic": "FMA_7197",
+    "kidney": "FMA_7203",
+    "kidneys": "FMA_7203",
+    "renal": "FMA_7203",
 }
 
 
@@ -92,6 +106,8 @@ class RetrievalContext(BaseModel):
     graph_edges: List[Dict[str, Any]] = Field(default_factory=list, description="Physiological dependency graph edges")
     valid_fma_ids_prompt_list: str = Field(default="", description="Formatted Markdown string for prompt whitelist")
     valid_fma_mappings: Dict[str, str] = Field(default_factory=dict, description="Dictionary mapping fma_id -> common_name")
+    routing_path: str = Field(default="Path A (Tier 1 Graph)", description="Routing path from Adaptive Gatekeeper")
+    gatekeeper_reason: str = Field(default="", description="Adaptive gatekeeper routing reason")
 
     def __getitem__(self, item: str) -> Any:
         return getattr(self, item)
@@ -140,20 +156,22 @@ class RAGRetriever:
                 else:
                     detected.add(target)
 
-        # 3. Match against loaded structures in local store (common_name and latin_name)
+        # 3. Match against loaded structures in local store (common_name, canonical_name, latin_name, glb_aliases)
         for fma_id, struct in local_store.structures.items():
-            c_name = struct.get("common_name", "").lower()
-            l_name = struct.get("latin_name", "").lower()
+            names_to_check = [
+                struct.get("common_name", ""),
+                struct.get("canonical_name", ""),
+                struct.get("latin_name", ""),
+            ]
+            for alias in struct.get("glb_aliases", []):
+                names_to_check.append(alias)
 
-            if c_name and len(c_name) > 2:
-                pattern = rf'\b{re.escape(c_name)}\b'
-                if re.search(pattern, query_lower):
-                    detected.add(fma_id)
-
-            if l_name and len(l_name) > 2:
-                pattern = rf'\b{re.escape(l_name)}\b'
-                if re.search(pattern, query_lower):
-                    detected.add(fma_id)
+            for name in names_to_check:
+                if name and len(name) > 2:
+                    pattern = rf'\b{re.escape(name.lower())}\b'
+                    if re.search(pattern, query_lower):
+                        detected.add(fma_id)
+                        break
 
         return detected
 
@@ -299,23 +317,83 @@ class RAGRetriever:
         mode: ActiveMode = "anatomy",
         top_k: int = 4,
         current_focused_ids: Optional[List[str]] = None,
-        focused_ids: Optional[List[str]] = None
+        focused_ids: Optional[List[str]] = None,
+        live_chunks: Optional[List[Dict[str, Any]]] = None
     ) -> RetrievalContext:
         """
         Synchronous / core retrieval pipeline:
-        1. Query literature corpus with cosine similarity scoring.
-        2. Evaluate Rule 4 grounding threshold gate (>= 0.72).
+        1. Evaluate Adaptive Gatekeeper intent: Path A (Mode 1 Anatomy) vs Path B (Mode 2 Pathology).
+        2. In Path B, retrieve live or cached StatPearls/PubMed chunks. In Path A, ground on 3D Scene Graph (0 calls).
         3. Detect mentioned anatomical structures + literature-associated structures.
         4. Traverse multi-hop dependency graph for downstream targets (e.g. LAD -> Septum, Apex).
-        5. Build validated FMA whitelist for prompt injection.
+        5. Build validated FMA whitelist with Cranio-Caudal or Caudo-Cranial spatial ordering.
         """
         current_focused_ids = current_focused_ids or focused_ids
-        # Step 1 & 2: Literature Search & Similarity Gate
-        retrieved_chunks, max_similarity, grounding_status = self.search_literature(
+
+        # Step 0: Adaptive Gatekeeper Evaluation
+        decision = adaptive_gatekeeper.evaluate(
             query=query,
             mode=mode,
-            top_k=top_k
+            focused_ids=current_focused_ids
         )
+
+        # Step 1: Detect mentioned anatomical entities
+        seed_fma_ids = self.detect_mentioned_fma_ids(query, current_focused_ids=current_focused_ids)
+
+        retrieved_chunks: List[Dict[str, Any]] = []
+        max_similarity: float = 0.0
+        grounding_status: str = "verified"
+
+        if live_chunks:
+            retrieved_chunks = live_chunks
+            max_similarity = 0.88
+            grounding_status = "verified"
+        elif decision.requires_external_rag:
+            # Mode 2 Pathology: search cached / local literature
+            retrieved_chunks, max_similarity, grounding_status = self.search_literature(
+                query=query,
+                mode=mode,
+                top_k=top_k
+            )
+        else:
+            # Mode 1 Anatomy/Physiology
+            if seed_fma_ids:
+                # Grounded in Tier 1 3D scene graph: 0 external RAG calls, 0ms latency
+                struct_chunks = []
+                for fid in seed_fma_ids:
+                    s_data = local_store.get_structure(fid)
+                    if s_data:
+                        summary = s_data.get("canonical_physiology_summary") or s_data.get("description_summary") or ""
+                        if summary:
+                            struct_chunks.append({
+                                "chunk_id": f"fma_chunk_{fid}",
+                                "source_id": f"FMA:{fid}",
+                                "source_type": "FMA 3D Scene Graph",
+                                "title": s_data.get("canonical_name") or s_data.get("common_name", fid),
+                                "section_heading": f"{s_data.get('organ_system', 'Anatomy').title()} Anatomy & Physiology",
+                                "content": summary,
+                                "citation_url": "https://bioportal.bioontology.org/ontologies/FMA",
+                                "associated_fma_ids": [fid],
+                                "similarity_score": 1.0
+                            })
+                retrieved_chunks = struct_chunks
+                max_similarity = 1.0
+                grounding_status = "verified"
+            else:
+                # No anatomical structures detected in query. Check literature for off-topic check.
+                lit_chunks, lit_sim, _ = self.search_literature(
+                    query=query,
+                    mode=mode,
+                    top_k=top_k
+                )
+                if lit_sim >= self.grounding_threshold:
+                    retrieved_chunks = lit_chunks
+                    max_similarity = lit_sim
+                    grounding_status = "verified"
+                else:
+                    retrieved_chunks = []
+                    max_similarity = lit_sim
+                    grounding_status = "unverified"
 
         # Convert to CitationItem models
         citation_items: List[CitationItem] = []
@@ -332,9 +410,6 @@ class RAGRetriever:
                 citation_items.append(item)
             except Exception as e:
                 logger.warning(f"[RAGRetriever] Error building CitationItem: {e}")
-
-        # Step 3: Entity detection
-        seed_fma_ids = self.detect_mentioned_fma_ids(query, current_focused_ids=current_focused_ids)
 
         # Add pre-linked structures from retrieved literature chunks
         for chunk in retrieved_chunks:
@@ -370,12 +445,20 @@ class RAGRetriever:
             else:
                 valid_fma_mappings[fma_id] = fma_id
 
+        # Spatial Ordering: Cranio-Caudal (Head-to-Toe) or Caudo-Cranial (Toe-to-Head)
+        if decision.spatial_direction == "cranio_caudal":
+            relevant_structures.sort(key=lambda s: (s.get("cranio_caudal_rank", 12), s.get("fma_id", "")))
+        elif decision.spatial_direction == "caudo_cranial":
+            relevant_structures.sort(key=lambda s: (s.get("caudo_cranial_rank", 12), s.get("fma_id", "")))
+        else:
+            relevant_structures.sort(key=lambda s: s.get("fma_id", ""))
+
         # Format FMA whitelist for prompt injection
         whitelist_lines = [f"- `{fid}`: {name}" for fid, name in sorted(valid_fma_mappings.items())]
         valid_fma_ids_prompt_list = "\n".join(whitelist_lines)
 
         logger.info(
-            f"[RAGRetriever] Query: '{query[:40]}...' | Mode: {mode} | "
+            f"[RAGRetriever] Query: '{query[:40]}...' | Mode: {mode} | Route: {decision.route_path} | "
             f"Grounding: {grounding_status} (max_sim={max_similarity:.3f}) | "
             f"Structures: {len(relevant_structures)} | Edges: {len(graph_edges)}"
         )
@@ -388,7 +471,9 @@ class RAGRetriever:
             relevant_structures=relevant_structures,
             graph_edges=graph_edges,
             valid_fma_ids_prompt_list=valid_fma_ids_prompt_list,
-            valid_fma_mappings=valid_fma_mappings
+            valid_fma_mappings=valid_fma_mappings,
+            routing_path=decision.route_path,
+            gatekeeper_reason=decision.routing_reason
         )
 
     async def retrieve_async(
@@ -401,14 +486,34 @@ class RAGRetriever:
     ) -> RetrievalContext:
         """
         Async wrapper for retrieve() to be used in FastAPI async routes.
+        Queries live NCBI Cloud RAG when gatekeeper routes to Path B.
         """
+        current_focused_ids = current_focused_ids or focused_ids
+        decision = adaptive_gatekeeper.evaluate(
+            query=query,
+            mode=mode,
+            focused_ids=current_focused_ids
+        )
+
+        live_chunks = None
+        if decision.requires_external_rag:
+            try:
+                live_chunks = await ncbi_cloud_rag.search_and_fetch(
+                    query=decision.search_query or query,
+                    top_k=top_k
+                )
+            except Exception as exc:
+                logger.warning(f"[RAGRetriever] Live NCBI Cloud RAG fetch error: {exc}")
+                live_chunks = None
+
         import asyncio
         return await asyncio.to_thread(
             self.retrieve,
             query=query,
             mode=mode,
             top_k=top_k,
-            current_focused_ids=current_focused_ids or focused_ids
+            current_focused_ids=current_focused_ids,
+            live_chunks=live_chunks
         )
 
 
