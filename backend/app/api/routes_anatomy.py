@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-from typing import List, Dict, Any
 from backend.app.db.local_store import local_store
 
 router = APIRouter(prefix="/api/v1/anatomy", tags=["Anatomy & Graph"])
