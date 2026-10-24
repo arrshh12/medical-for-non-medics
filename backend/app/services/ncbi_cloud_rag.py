@@ -4,7 +4,6 @@ Queries live NCBI E-utilities (esearch.fcgi + efetch.fcgi) with rate limiting (a
 secure XML parsing (defusedxml), and local/Supabase read-through caching.
 """
 
-import json
 import logging
 import re
 from typing import Dict, Any, List, Optional, Tuple
