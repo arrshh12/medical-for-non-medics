@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 from backend.app.config import settings
 
 logger = logging.getLogger(__name__)
