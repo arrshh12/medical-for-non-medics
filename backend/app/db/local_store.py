@@ -4,7 +4,6 @@ Guarantees 100% zero-configuration local runnability for HoloMed 3D without requ
 """
 
 import json
-import math
 import os
 import re
 from pathlib import Path
