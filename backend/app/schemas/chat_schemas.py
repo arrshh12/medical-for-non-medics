@@ -1,6 +1,5 @@
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
-from backend.app.schemas.scene_command_schemas import SceneCommandSchema
 
 
 ComprehensionLevel = Literal["layperson", "pre_med", "clinician"]
