@@ -8,7 +8,7 @@ Evaluates user intent and operational mode to eliminate unnecessary external RAG
 """
 
 import re
-from typing import Any, List, Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 from backend.app.schemas.chat_schemas import ActiveMode, ComprehensionLevel
 
